@@ -331,13 +331,15 @@ let analyze_and_report ~changed_files mode =
       ()
   | (Analyze | Run), Hackc _ when Config.hack_verify_capture_only ->
       ()
-  | (Analyze | Run), _ ->
+  | (Analyze | Run), _ -> ()
+      (*
       if SourceFiles.is_empty () then error_nothing_to_analyze mode
       else (
         execute_analyze ~changed_files ;
         if Config.starvation_whole_program then StarvationGlobalAnalysis.whole_program_analysis () ;
         if Config.shrink_analysis_db then DBWriter.shrink_analysis_db () ) ;
       if Config.report then report ()
+      *)
 
 
 let analyze_and_report ~changed_files mode =

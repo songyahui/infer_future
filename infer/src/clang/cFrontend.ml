@@ -660,9 +660,12 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   CType_decl.add_predefined_types tenv ;
   init_global_state_capture () ;
   let source_file = translation_unit_context.CFrontend_config.source_file in
-  let integer_type_widths = translation_unit_context.CFrontend_config.integer_type_widths in
+  (*let integer_type_widths = translation_unit_context.CFrontend_config.integer_type_widths in
   L.(debug Capture Verbose)
     "@\n Start building call/cfg graph for '%a'....@\n" SourceFile.pp source_file ;
+  *)
+
+  print_endline ("source_file = " ^ SourceFile.to_string source_file);  
   let cfg = compute_icfg translation_unit_context tenv ast in
 
 
