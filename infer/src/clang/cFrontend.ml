@@ -297,6 +297,94 @@ let updateStakeUsingLoads intrs =
         ) 
 
 
+let getPureFromFunctionCall (e_fun:Exp.t) (arg_ts:(Exp.t * Typ.t) list) ((Store s):IR.Sil.instr) stack : pure option =
+  let exp1 = s.e1 in 
+  let temp = expressionToTerm exp1 stack in 
+  match temp with 
+  | None -> None 
+  | Some temp -> 
+    let funName = (Exp.to_string e_fun) in 
+    if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall funName then 
+      Some (Eq (temp, Basic(ANY)))
+    else 
+      (*let argumentTerms =  List.map arg_ts ~f:(fun (eA, _) -> expressionToTerm eA stack) in *)
+      (* Predicate(funName, argumentTerms) *)
+      Some (Eq (temp, Basic(ANY)))
+
+
+
+let rec getPureFromDeclStmtInstructions (instrs:Sil.instr list) stack : pure option = 
+  (*print_endline ("getPureFromDeclStmtInstructions: " ^ string_of_int (List.length instrs));
+  print_endline (List.fold instrs ~init:"" ~f:(fun acc a -> acc ^ "," ^ string_of_instruction a)); 
+  *)
+  match instrs with 
+  | Store s :: _ -> 
+    (*print_endline (Exp.to_string s.e1 ^ " = " ^ Exp.to_string s.e2); *)
+    let exp1 = s.e1 in 
+    let exp2 = s.e2 in 
+    let t1 = expressionToTerm exp1 stack in 
+    let t2 = expressionToTerm exp2 stack in 
+    (match t1, t2 with 
+    | Some (Basic(BSTR a )) , Some (Basic(BINT b )) -> Some (Eq (Basic(BSTR a ), Basic(BINT b )))
+    | Some (Basic(BVAR a )) , Some (Basic(BINT b )) -> Some (Eq (Basic(BVAR a ), Basic(BINT b )))
+    (*
+    | _ -> Some (Eq (t1, Basic ANY))  *)
+    (* if it is temp=user_quota_size-quota_size, temp will be ANY *)
+    | Some t1, Some t2 -> Some (Eq (t1, t2)) 
+    | _, _ -> None 
+
+    )  
+    
+  | Load l :: tail ->
+    let stack' = (l.e, l.id):: stack in 
+    getPureFromDeclStmtInstructions tail stack'
+
+  | Call ((ret_id, _), e_fun, arg_ts, _, _)  :: Store s :: _ -> 
+    (*print_endline (Exp.to_string e_fun) ;   *)
+    getPureFromFunctionCall e_fun arg_ts (Store s) stack
+    
+  | _ -> None
+
+let rec getPureFromBinaryOperatorStmtInstructions (op: string) (instrs:Sil.instr list) stack : pure option = 
+  print_endline ("getPureFromBinaryOperatorStmtInstructions: " ^ string_of_int (List.length instrs));
+  
+  if String.compare op "Assign" == 0 then 
+    match instrs with 
+    | Store s :: _ -> 
+      print_endline ("Store: " ^  Exp.to_string s.e1 ^ " = " ^ Exp.to_string s.e2); 
+      let exp1 = s.e1 in 
+      let exp2 = s.e2 in 
+      (match expressionToTerm exp1 stack, expressionToTerm exp2 stack with 
+      | Some e1, Some e2 -> 
+        print_endline ("res = Some " ^ string_of_pure (Eq (e1, e2))); 
+        Some (Eq (e1, e2))
+      | _, _ -> 
+      print_endline ("res = None " ); 
+      None 
+      
+      )
+      
+    | Load l :: tail ->
+      let stack' = (l.e, l.id):: stack in 
+      getPureFromBinaryOperatorStmtInstructions "Assign" tail stack'    
+    | Call ((ret_id, _), e_fun, arg_ts, _, _)  :: Store s :: _ -> 
+      (*print_endline (Exp.to_string e_fun) ;   *)
+      getPureFromFunctionCall e_fun arg_ts (Store s) stack
+    
+    | _ -> None 
+  else if String.compare op "SubAssign" == 0 || String.compare op "AddAssign" == 0 then  
+    match instrs with 
+    | Store s :: _ ->  
+      getPureFromBinaryOperatorStmtInstructions "Assign" instrs stack
+    | Load l :: tail ->
+      let stack' = (l.e, l.id):: stack in 
+      print_endline ("SubAssign: " ^ string_of_stack stack');
+      getPureFromBinaryOperatorStmtInstructions "SubAssign" tail stack'
+
+    | _ -> None 
+  else None
+
+
 let regularExpr_of_Node node stack : (summary * stack )= 
   let node_kind = Procdesc.Node.get_kind node in
   let node_key =  getNodeID node in
@@ -310,7 +398,7 @@ let regularExpr_of_Node node stack : (summary * stack )=
   | Start_node -> [TRUE, Emp], []
   | Exit_node ->  [TRUE, Emp], []
   | Join_node ->  [TRUE, Emp] , []
-  | Skip_node _ ->  [TRUE, Singleton(Predicate (skipKeyword, []), node_key)] , []
+  | Skip_node _ ->  [TRUE, Emp] , []
   | Prune_node (f,_,_) ->  
     let loads, last = partitionFromLast instrs in 
     let stack' = updateStakeUsingLoads loads in 
@@ -370,7 +458,6 @@ let regularExpr_of_Node node stack : (summary * stack )=
     | _ -> 
       [(TRUE, Singleton(TRUE, node_key))] , stack'
     )
-   (*
 
   | Stmt_node stmt_kind ->         
     match stmt_kind with 
@@ -378,7 +465,7 @@ let regularExpr_of_Node node stack : (summary * stack )=
       if existAux (fun a b-> String.compare a b ==0) ["EQ";"GT";"LT";"NE";"LE";"GE"] op then 
         (*String.compare op "EQ" == 0 || String.compare op "GT" == 0 then  *)
         let stack = updateStakeUsingLoads instrs in 
-        Emp , stack
+        [(TRUE, Emp)] , stack
         (*Singleton(TRUE, node_key), stack *)
         (* This is to avoid th extra (T)@loc before the guard, we only need to 
            record the stack, but no need any event *)
@@ -390,24 +477,25 @@ let regularExpr_of_Node node stack : (summary * stack )=
         | Store s :: _ -> 
           let exp1 = s.e1 in 
           (match expressionToTerm exp1 stack' with 
-          | None -> Singleton(TRUE, node_key), []   
+          | None -> [(TRUE, Singleton(TRUE, node_key))], []   
           | Some t1 -> 
           
-          let () = allTheUniqueIDs := !allTheUniqueIDs + 1 in 
-          let g1 = Guard(Lt(t1, Basic (BINT 0 )), !allTheUniqueIDs) in 
-          let () = allTheUniqueIDs := !allTheUniqueIDs + 1 in 
-          let g2 = Guard((Gt(t1, Basic (BINT 0 ))), !allTheUniqueIDs) in 
+          let g1 =(Lt(t1, Basic (BINT 0 ))) in 
+          let g2 =((Gt(t1, Basic (BINT 0 )))) in 
 
-          Disjunction (Concate(g1, Singleton(Eq(t1, t1), node_key)), Concate(g2, Singleton(Eq(t1, Minus (t1 ,Basic (BINT 1))), node_key)) ), 
+          [(g1, Singleton(Eq(t1, t1), node_key))]
+          @
+          [(g2, Singleton(Eq(t1, Minus (t1 ,Basic (BINT 1))), node_key))], 
           stack' )
-        | _ -> Singleton(TRUE, node_key), []   
+          
+        | _ -> ([TRUE, Emp]), []   
 
 
           
       else 
         (match getPureFromBinaryOperatorStmtInstructions op instrs stack with 
-        | Some pure -> Singleton (pure, node_key), []
-        | None -> Singleton(TRUE, node_key), [] )  
+        | Some pure -> [(TRUE, Singleton (pure, node_key))], []
+        | None -> [TRUE, Emp], [] )  
         
     
     | UnaryOperator 
@@ -418,8 +506,8 @@ let regularExpr_of_Node node stack : (summary * stack )=
 
       print_endline ("DeclStmt: " ^ string_of_stack stack');
       (match getPureFromDeclStmtInstructions instrs stack with 
-      | Some pure -> Singleton (pure, node_key), stack'
-      | None -> Singleton(TRUE, node_key), stack' )
+      | Some pure -> [(TRUE, Singleton (pure, node_key))], stack'
+      | None -> [TRUE, Emp], stack' )
 
     | ReturnStmt -> 
       (match instrs with 
@@ -429,12 +517,12 @@ let regularExpr_of_Node node stack : (summary * stack )=
         (*predicateDeclearation:= (retKeyword, ["Number";"Number"]) :: !predicateDeclearation ;
         *)
         (match expressionToTerm exp2 stack with
-        | Some t -> Singleton (Predicate (retKeyword, [t]), node_key), []
-        | _ ->  Singleton (Predicate (retKeyword, []), node_key), []
+        | Some t -> [(TRUE, Singleton (Predicate (retKeyword, [t]), node_key))], []
+        | _ ->  [(TRUE, Singleton (Predicate (retKeyword, []), node_key))], []
         )
 
       | _ -> 
-        Singleton (Predicate (retKeyword, [Basic(BINT 0)]), node_key), []
+        [(TRUE, Singleton (Predicate (retKeyword, [Basic(BINT 0)]), node_key))], []
       )
     | Call x  -> 
       (match instrs with 
@@ -456,23 +544,22 @@ let regularExpr_of_Node node stack : (summary * stack )=
         
         let funName =removeDotsInVarName funName in 
 
-        predicateDeclearation:= (funName, argumentTermsType@["Number"]) :: !predicateDeclearation ;
-        Singleton (Predicate (funName, argumentTerms), node_key), [] 
+        [(TRUE, Singleton (Predicate (funName, argumentTerms), node_key))], [] 
        
       | _ -> 
         let funName = String.sub x 5 (String.length x - 5) in 
         let funName =removeDotsInVarName funName in 
 
-        Singleton (Predicate (funName, []), node_key), []
+        [(TRUE, Singleton (Predicate (funName, []), node_key))], []
       )
-    *)
+    
     
       
     | _ -> [(TRUE, Emp)] , []
 
-let resolve_loop (summary:summary) : summary = 
+let resolve_loop (loop_body:summary) (rest:summary) : summary = 
   print_endline ("not yet in resolve_loop");
-  summary
+  loop_body @ rest
 
 
 let rec recordToRegularExpr (li:Procdesc.Node.t list) stack : (summary * stack) = 
@@ -535,7 +622,7 @@ let rec existCycleHelper stack (currentState:Procdesc.Node.t) (id:state list) : 
       | Some (non_cycle_succ, loop_body, stack1) -> 
         (*print_endline ("loop_body1: " ^ string_of_regularExpr loop_body); *)
         let re1Succ, stackSucc, flag = moveForward_aux (stack@stack1) non_cycle_succ in  
-        (concateSummaries (resolve_loop loop_body) re1Succ, stack@stack1@stackSucc, flag)
+        (resolve_loop loop_body re1Succ , stack@stack1@stackSucc, flag)
       | None -> moveForward_aux stack currentState
       )
     | _ -> moveForward_aux stack currentState
@@ -626,7 +713,7 @@ let rec getRegularExprFromCFG_helper stack (currentState:Procdesc.Node.t): (summ
     | Some (non_cycle_succ, loop_body, stack1) -> 
       (*print_endline ("loop_body2: " ^ string_of_regularExpr loop_body); *)
       let re1Succ, stackSucc = moveForward (stack@stack1) non_cycle_succ in 
-      concateSummaries (resolve_loop loop_body) re1Succ, (stack@stack1@stackSucc)
+      (resolve_loop loop_body re1Succ) , (stack@stack1@stackSucc)
     | None -> moveForward stack currentState
     )
   | _ -> moveForward stack currentState
@@ -642,14 +729,12 @@ let getRegularExprFromCFG (procedure:Procdesc.t) : summary =
 
 
 let computeSummaryFromCGF (procedure:Procdesc.t) : (summary) = 
-  let pass1 =   (getRegularExprFromCFG procedure) in 
+  let pass1 =  normalise_summary (getRegularExprFromCFG procedure) in 
   
   print_endline ("\nPASS1:\n"^string_of_summary (pass1)^ "\n------------"); 
 
-  let pass2 =  (normalise_summary ( pass1)) in 
-  print_endline ("\nPASS2:\n"^string_of_summary (pass2)^ "\n------------"); 
 
-  pass2
+  pass1
 
 
 
