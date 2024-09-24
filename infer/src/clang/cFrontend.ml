@@ -95,7 +95,7 @@ let rec expressionToTerm (exp:Exp.t) stack : terms option  =
   match exp with 
   | Var t -> 
     let tName = (Ident.to_string t) in 
-    print_endline ("!!!expressionToTerm tName " ^ tName) ; 
+    (*print_endline ("!!!expressionToTerm tName " ^ tName) ;  *)
     (match existStack stack stack tName with 
     | Some (Lvar t) -> Some(Basic (BVAR (Pvar.to_string t ))) (** Pure variable: it is not an lvalue *)
     | Some exp -> Some(Basic (BVAR (Exp.to_string exp )))
@@ -149,7 +149,7 @@ let rec expressionToTerm (exp:Exp.t) stack : terms option  =
 
 
 let rec expressionToPure (exp:Exp.t) stack: pure option = 
-  print_endline ("expressionToPure : " ^ (Exp.to_string exp));
+  (*print_endline ("expressionToPure : " ^ (Exp.to_string exp)); *)
   match exp with 
   | BinOp (Eq, BinOp (Mod _, e1, e2), e3) ->  
     let t1 = expressionToTerm e1 stack in 
@@ -443,7 +443,7 @@ let regularExpr_of_Node node stack : (summary * stack )=
           | _ -> p 
 
         in 
-        print_endline ("last is Prune " ^ string_of_pure p');
+        (*print_endline ("last is Prune " ^ string_of_pure p'); *)
         [(p', Emp)]
       | None -> 
 
@@ -504,7 +504,7 @@ let regularExpr_of_Node node stack : (summary * stack )=
       let loads, _ = partitionFromLast instrs in 
       let stack' = updateStakeUsingLoads loads in 
 
-      print_endline ("DeclStmt: " ^ string_of_stack stack');
+      (*print_endline ("DeclStmt: " ^ string_of_stack stack'); *)
       (match getPureFromDeclStmtInstructions instrs stack with 
       | Some pure -> [(TRUE, Singleton (pure, node_key))], stack'
       | None -> [TRUE, Emp], stack' )
@@ -558,7 +558,13 @@ let regularExpr_of_Node node stack : (summary * stack )=
     | _ -> [(TRUE, Emp)] , []
 
 let resolve_loop (loop_body:summary) (rest:summary) : summary = 
-  print_endline ("not yet in resolve_loop");
+  let loop_body = normalise_summary loop_body in 
+  let rest = normalise_summary rest in 
+
+  print_endline ("====== resolve_loop ====== \n");
+  print_endline ("loop_body: " ^ string_of_summary loop_body ^ "\n");
+  print_endline ("rest: " ^ string_of_summary rest ^ "\n");
+
   loop_body @ rest
 
 
@@ -621,6 +627,10 @@ let rec existCycleHelper stack (currentState:Procdesc.Node.t) (id:state list) : 
       (match existCycle stack currentState (currentID::id) with 
       | Some (non_cycle_succ, loop_body, stack1) -> 
         (*print_endline ("loop_body1: " ^ string_of_regularExpr loop_body); *)
+        let non_cycle_succ  =
+          match Procdesc.Node.get_succs non_cycle_succ with 
+          | [] -> non_cycle_succ
+          | hd :: _ -> hd in 
         let re1Succ, stackSucc, flag = moveForward_aux (stack@stack1) non_cycle_succ in  
         (resolve_loop loop_body re1Succ , stack@stack1@stackSucc, flag)
       | None -> moveForward_aux stack currentState
@@ -712,6 +722,11 @@ let rec getRegularExprFromCFG_helper stack (currentState:Procdesc.Node.t): (summ
     (match existCycle stack currentState [currentID] with 
     | Some (non_cycle_succ, loop_body, stack1) -> 
       (*print_endline ("loop_body2: " ^ string_of_regularExpr loop_body); *)
+
+      let non_cycle_succ  =
+        match Procdesc.Node.get_succs non_cycle_succ with 
+        | [] -> non_cycle_succ
+        | hd :: _ -> hd in 
       let re1Succ, stackSucc = moveForward (stack@stack1) non_cycle_succ in 
       (resolve_loop loop_body re1Succ) , (stack@stack1@stackSucc)
     | None -> moveForward stack currentState
