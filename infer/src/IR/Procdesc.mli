@@ -22,7 +22,7 @@ module Node : sig
   type t [@@deriving compare, hash]
 
   (** node id *)
-  type id = private int [@@deriving compare, equal, hash]
+  type id = int [@@deriving compare, equal, hash]
 
   type destruction_kind =
     | DestrBreakStmt
