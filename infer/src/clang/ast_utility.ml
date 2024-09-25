@@ -1,4 +1,7 @@
 let retKeyword = "Return"
+
+let finalReport = (ref "")
+
 let nonDetermineFunCall = ["_fun__nondet_int";"_fun___VERIFIER_nondet_int"]
 
 let current_source_file = ref ""

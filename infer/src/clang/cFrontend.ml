@@ -7,6 +7,7 @@
 
 open! IStd
 open Ast_utility
+open Sys
 module L = Logging
 
 (* ocamlc gets confused by [module rec]: https://caml.inria.fr/mantis/view.php?id=6714 *)
@@ -176,6 +177,30 @@ let init_global_state_capture () =
 
 let do_cpp_preanalyses cfg = CppLambdaCalls.process cfg
 
+
+let outputFinalReport str path = 
+
+  let oc = open_out_gen [Open_append; Open_creat] 0o666 path in 
+  try 
+    Printf.fprintf oc "%s" str;
+    close_out oc;
+    ()
+
+  with e ->                      (* 一些不可预见的异常发生 *)
+    print_endline ("could not open " ^ path);
+    close_out_noerr oc;           (* 紧急关闭 *)
+    raise e                      (* 以出错的形式退出: 文件已关闭,但通道没有写入东西 *)
+  ;; 
+
+
+let create_newdir path = 
+  let full_permission = 0o777 in
+  try 
+    if (Sys.is_directory path) == `No then 
+      Unix.mkdir path ~perm:full_permission
+  with Sys_error _ -> ()
+
+
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
   let tenv = Tenv.create () in
   CType_decl.add_predefined_types tenv ;
@@ -193,11 +218,33 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   let (source_Address, decl_list, lines_of_code) = retrive_basic_info_from_AST ast in
 
   let start = Unix.gettimeofday () in 
-  let reasoning_Res = List.map decl_list  
+  let _ = List.iter decl_list  
     ~f:(fun dec -> reason_about_declaration dec source_Address) in 
   let analysisTime = (Unix.gettimeofday () -. start) in 
 
+  let msg = 
+    source_Address ^ ","
+  ^ string_of_int (lines_of_code + 1 ) ^ "," (*  lines of code;  *) 
+  ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
+  
+  in 
 
+  let () = finalReport := !finalReport ^ msg in 
+  let dirName = "/infer-term" in 
+  let path = Sys.getcwd()  (* "/Users/yahuis/Desktop/git/infer_termination/" *) in 
+  print_endline (Sys.getcwd());
+
+  create_newdir (path ^ dirName); 
+
+  let output_report =  path ^ dirName ^ "/report.csv" in 
+  let output_detail =  path ^ dirName ^ "/detail.txt" in 
+
+  outputFinalReport (msg) output_report ; 
+  (
+  if String.compare !finalReport "" == 0  then ()
+  else   
+    (let () = finalReport := ("\nIn " ^ source_Address ^ ":\n") ^ !finalReport  in 
+    outputFinalReport (!finalReport) output_detail)) ; 
   ()
 
 
