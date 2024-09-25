@@ -589,6 +589,7 @@ let rec recordToRegularExpr (li:Procdesc.Node.t list) stack : (summary * stack) 
     concateSummaries eventHd eventTail, (stack@stack'@stack'')
 
 let rec existCycleHelper stack (currentState:Procdesc.Node.t) (id:state list) : (summary * stack * bool)  = 
+(* existCycleHelper is to compute the cycle summary *)
   let node_kind = Procdesc.Node.get_kind currentState in
   let currentID = getNodeID currentState in
   
@@ -603,8 +604,6 @@ let rec existCycleHelper stack (currentState:Procdesc.Node.t) (id:state list) : 
     | [] -> raise (Failure "existCycleHelper not possible")
     | hd::tail -> hd, tail
   in 
-
-
 
   let moveForward_aux stackCtx (nodeIn:Procdesc.Node.t): (summary * stack * bool)  =
     let reExtensionIn, stackIn = recordToRegularExpr ([nodeIn]) stackCtx in  
@@ -653,14 +652,15 @@ let rec existCycleHelper stack (currentState:Procdesc.Node.t) (id:state list) : 
 
 
 and existCycle stack (currentState:Procdesc.Node.t) (id:state list) : (pure * Procdesc.Node.t * summary * stack) option = 
-  
+(* existCycle checks a given node if it leads to a cycle, 
+in the case of YES, also return the cycle body 
+*)
+
   (*
   print_endline ("existCycl:\n" ^ string_of_int (getLineNum currentState)); 
   print_endline ("id:\n" ^  List.fold_left ~init:"" id ~f:(fun acc a -> acc ^ string_of_int (a))); 
   *)
-
   let reExtension, stack' = recordToRegularExpr ([currentState]) stack in 
-
 
   let nextStates = Procdesc.Node.get_succs currentState in 
   match nextStates with 
@@ -673,12 +673,11 @@ and existCycle stack (currentState:Procdesc.Node.t) (id:state list) : (pure * Pr
     | _ -> 
       (match existCycle (stack'@stack) succ id with 
       | None -> None 
-      | Some (loop_guard, node, re, stack'') -> Some (loop_guard,node, concateSummaries  reExtension re, stack@stack'@stack'')
+      | Some (loop_guard, node, re, stack'') -> Some (loop_guard,node, concateSummaries reExtension re, stack@stack'@stack'')
       
       )
     )
 
-    
   | [succ1;succ2] -> 
     let trueNodefalseNode = 
       (match (Procdesc.Node.get_kind succ1, Procdesc.Node.get_kind succ2) with 
@@ -710,7 +709,8 @@ and existCycle stack (currentState:Procdesc.Node.t) (id:state list) : (pure * Pr
 let rec getRegularExprFromCFG_helper stack (currentState:Procdesc.Node.t): (summary * stack) = 
   let node_kind = Procdesc.Node.get_kind currentState in
   let currentID = getNodeID currentState in
-  (*print_endline ("getRegularExprFromCFG_helper:\n" ^ string_of_int currentID); 
+  (*
+  print_endline ("getRegularExprFromCFG_helper:\n" ^ string_of_int currentID); 
   *)
 
   let moveForward stackCtx (nodeIn:Procdesc.Node.t): (summary * stack)  = 
@@ -720,6 +720,18 @@ let rec getRegularExprFromCFG_helper stack (currentState:Procdesc.Node.t): (summ
     let nextStates = Procdesc.Node.get_succs nodeIn in 
     match nextStates with 
     | [] -> (reExtensionIn , stack'')
+    | succLi -> 
+      (* iterate all the successors, disjunct the summaries from all the successors, and union the stack results *)
+      let (accStack, accSummary) = 
+        List.fold_left succLi
+        ~f:(fun (accStack, accSummary) succ -> 
+          let summarySucc, stackSucc = getRegularExprFromCFG_helper stack'' succ in 
+          (accStack@stackSucc, accSummary@summarySucc)) 
+        ~init:(stack'', []) 
+      in 
+      concateSummaries reExtensionIn accSummary, (accStack)
+
+    (*
     | [succ] ->  
       let re1Succ, stackSucc= getRegularExprFromCFG_helper stack'' succ in 
       concateSummaries reExtensionIn re1Succ, (stack''@stackSucc)
@@ -728,6 +740,7 @@ let rec getRegularExprFromCFG_helper stack (currentState:Procdesc.Node.t): (summ
       let re1Succ1, stackSucc1 = getRegularExprFromCFG_helper stack'' succ1 in 
       let re1Succ2, stackSucc2 = getRegularExprFromCFG_helper stack'' succ2 in 
       concateSummaries (reExtensionIn) (re1Succ1@re1Succ2), (stack''@stackSucc1@stackSucc2)
+    *)
   in 
 
   (match node_kind with 
@@ -739,11 +752,12 @@ let rec getRegularExprFromCFG_helper stack (currentState:Procdesc.Node.t): (summ
     (match existCycle stack currentState [currentID] with 
     | Some (loop_guard, non_cycle_succ, loop_body, stack1) -> 
       (*print_endline ("loop_body2: " ^ string_of_regularExpr loop_body); *)
-
       let non_cycle_succ  =
+        (* this is to remove the negated constraints from the else branck *)
         match Procdesc.Node.get_succs non_cycle_succ with 
         | [] -> non_cycle_succ
-        | hd :: _ -> hd in 
+        | hd :: _ -> hd 
+      in 
       let re1Succ, stackSucc = moveForward (stack@stack1) non_cycle_succ in 
       (resolve_loop loop_guard loop_body re1Succ) , (stack@stack1@stackSucc)
     | None -> moveForward stack currentState
