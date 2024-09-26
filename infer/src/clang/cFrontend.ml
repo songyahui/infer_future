@@ -261,16 +261,12 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
     "CallExpr " ^ string_of_stmt x ^" (" ^  string_of_stmt_list rest ", " ^ ") "
 )
 
-  | ForStmt (stmt_info, [init; decl_stmt; condition; increment; body]) ->
-    "ForStmt " ^  string_of_stmt_list ([body]) " " 
+  | ForStmt (stmt_info, stmt_list) ->
+    "ForStmt " ^  string_of_stmt_list (stmt_list) " " 
 
   
   | WhileStmt (stmt_info, stmt_list) ->
     "WhileStmt " ^  string_of_stmt_list (stmt_list) " " 
-  | WhileStmt (stmt_info, [condition; body]) ->
-    "WhileStmt " ^  string_of_stmt_list ([body]) " " 
-  | WhileStmt (stmt_info, [decl_stmt; condition; body]) ->
-    "WhileStmt " ^  string_of_stmt_list ([body]) " " 
 
   | RecoveryExpr (stmt_info, x::_, _) -> "RecoveryExpr " ^ string_of_stmt x
   | RecoveryExpr (stmt_info, [], _) -> "RecoveryExpr []" 
@@ -441,6 +437,10 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 
 let rec syh_compute_stmt_postcondition (current:summary) (prog: core_lang) : summary = []
 
+let loop_guard condition = 
+  match stmt2Pure condition with 
+    | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
+    | Some p -> p
 
 
 
@@ -490,11 +490,6 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   
   
   match instr with 
-  | ReturnStmt  (stmt_info, _) ->
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-
-    (*print_endline ("ReturnStmt:" ^ string_of_stmt_list stmt_list " ");*)
-    CValue (UNIT) 
 
   | IntegerLiteral (stmt_info, stmt_list, expr_info, integer_literal_info) ->
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
@@ -504,12 +499,39 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     if String.length int_str > 18 then (CValue (Var "SYH_BIGINT"))
     else (CValue(Num (int_of_string(int_str))))
 
-
+  | ParenExpr(_, stmt_list, _) 
+  | ReturnStmt  (_, stmt_list) 
+  | ImplicitCastExpr (_, stmt_list, _, _, _) 
   | CompoundStmt (_, stmt_list) -> 
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
-
     sequentialComposingListStmt stmts
-    
+
+  | CompoundAssignOperator (stmt_info, x::y::_, _, _, _) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    (match stmt2Term x, stmt2Term y with 
+    | Some t1 , Some t2 -> CAssign (t1, CValue (Plus(t1, t2)), fp)
+    | _,  _ -> 
+      let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+      CValue (ev)
+    )
+       
+
+  | DeclRefExpr (_, _, _, decl_ref_expr_info) ->
+    (*"DeclRefExpr "^*)
+    (match decl_ref_expr_info.drti_decl_ref with 
+    | None -> 
+      let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+      CValue (ev)
+    | Some decl_ref ->
+      (
+        match decl_ref.dr_name with 
+        | None -> 
+          let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+          CValue (ev)
+        | Some named_decl_info -> (CValue (Var named_decl_info.ni_name))
+      )
+    )
+
 
   | DeclStmt (stmt_info, _, handlers) -> 
 
@@ -520,11 +542,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | WhileStmt (stmt_info, condition:: stmt_list) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    let (loop_guard:pure) = 
-      match stmt2Pure condition with 
-      | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
-      | Some p -> p
-    in 
+    let (loop_guard:pure) = loop_guard condition in 
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
 
     let core_lang = sequentialComposingListStmt stmts in 
@@ -586,6 +604,24 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     )
 
     
+  | ForStmt (stmt_info, init:: decl_stmt:: condition:: update:: body) ->
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    (*
+    print_endline ("decl_stmt " ^ Clang_ast_proj.get_stmt_kind_string decl_stmt); 
+    (*it is usuallt decl_stmt NullStmt *)
+    *)
+
+    let init = convert_AST_to_core_program init in 
+    let (loop_guard:pure) = loop_guard condition in 
+    let update = convert_AST_to_core_program update in  
+
+    let body = List.map body ~f:(fun a -> convert_AST_to_core_program a) in 
+    let loop_body = sequentialComposingListStmt body in 
+    let loop = CWhile (loop_guard, CSeq(loop_body, update), fp)  in 
+
+
+    CSeq(init, CSeq(loop_body, loop))
+
 
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
