@@ -36,6 +36,9 @@ let compute_icfg trans_unit_ctx tenv ast =
       assert false
 
 
+
+
+
 let stmt2Term_helper (op: string) (t1: term option) (t2: term option) : term option = 
   match (t1, t2) with 
   | (None, _) 
@@ -289,6 +292,106 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
 
 
 
+let stmt2Pure_helper (op: string) (t1: term option) (t2: term option) : pure option = 
+  match (t1, t2) with 
+  | (None, _) 
+  | (_, None ) -> None 
+  | (Some t1, Some t2) -> 
+    let p = 
+      if String.compare op "<" == 0 then Lt (t1, t2)
+    else if String.compare op ">" == 0 then Gt (t1, t2)
+    else if String.compare op ">=" == 0 then GtEq (t1, t2)
+    else if String.compare op "<=" == 0 then LtEq (t1, t2)
+    else if String.compare op "!=" == 0 then Neg (Eq (t1, t2))
+
+    else Eq (t1, t2)
+    in Some p 
+
+let string_of_unary_operator_info  (unary_operator_info:Clang_ast_t.unary_operator_info)= 
+  match unary_operator_info.uoi_kind with
+    `PostInc -> "PostInc"
+    | `PostDec -> "PostDec"
+    | `PreInc -> "PreInc"
+    | `PreDec -> "PreDec"
+    | `AddrOf -> "AddrOf"
+    | `Deref -> "Deref"
+    | `Plus-> "Plus"
+    | `Minus -> "Minus"
+    | `Not -> "Not"
+    | `LNot -> "LNot"
+    | `Real -> "Real"
+    | `Imag -> "Imag"
+    | `Extension -> "Extension"
+    | `Coawait-> "Coawait"
+
+
+let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option = 
+  (*print_string ("stmt2Pure" ^ Clang_ast_proj.get_stmt_kind_string instr );*)
+  match instr with 
+  | BinaryOperator (stmt_info, x::y::_, expr_info, binop_info)->
+    (match binop_info.boi_kind with
+    | `LT -> stmt2Pure_helper "<" (stmt2Term x) (stmt2Term y) 
+    | `GT -> stmt2Pure_helper ">" (stmt2Term x) (stmt2Term y) 
+    | `GE -> stmt2Pure_helper ">=" (stmt2Term x) (stmt2Term y) 
+    | `LE -> stmt2Pure_helper "<=" (stmt2Term x) (stmt2Term y) 
+    | `EQ -> stmt2Pure_helper "=" (stmt2Term x) (stmt2Term y) 
+    | `NE -> stmt2Pure_helper "!=" (stmt2Term x) (stmt2Term y) 
+    | `And | `LAnd -> 
+      (match ((stmt2Pure x ), (stmt2Pure y )) with 
+      | Some p1, Some p2 -> Some (p1) (*Some (Ast_utility.PureAnd (p1, p2))*)
+      | Some p1, None -> Some (p1)
+      | None, Some p1 -> Some (p1)
+      | None, None -> None 
+      )
+    | `Or | `LOr | `Xor-> 
+      (match ((stmt2Pure x ), (stmt2Pure y )) with 
+      | Some p1, Some p2 -> Some (Ast_utility.PureOr (p1, p2))
+      | Some p1, None -> Some (p1)
+      | None, Some p1 -> Some (p1)
+      | None, None -> None 
+      )
+    | _ -> None 
+    )
+
+  | ImplicitCastExpr (_, x::_, _, _, _) -> stmt2Pure x
+  | UnaryOperator (stmt_info, x::_, expr_info, op_info)->
+    (match op_info.uoi_kind with
+    | `Not -> 
+      (match stmt2Pure x with 
+      | None -> (*print_endline ("`Not none");*) None 
+      | Some p -> Some (Neg p))
+    | `LNot -> 
+      (match stmt2Term x with 
+      | None -> 
+        (match stmt2Pure x with 
+        | None -> None 
+        | Some p -> Some (Neg p))
+      | Some t -> Some (Eq(t, (Num 0)))
+      )
+      
+    | _ -> 
+      None
+    )
+  | ParenExpr (_, x::rest, _) -> stmt2Pure x
+  | MemberExpr _ -> 
+    (match stmt2Term instr with 
+    | Some t -> Some (Gt (t, (Num 0))) 
+    | None  -> None )
+  | DeclRefExpr _ -> 
+    (match stmt2Term instr with 
+    | Some t -> Some (Neg(Eq(t, (Num 0))))
+    | _ -> Some (Gt ((( Var (Clang_ast_proj.get_stmt_kind_string instr))), ( Var ("null"))))
+    )
+
+  | IntegerLiteral _ -> 
+    if String.compare (string_of_stmt instr) "0" == 0 then Some (FALSE)
+    else if String.compare (string_of_stmt instr) "1" == 0 then Some (TRUE)
+    else None 
+
+    
+  
+  | _ -> Some (Gt ((( Var (Clang_ast_proj.get_stmt_kind_string instr))), ( Var ("null"))))
+
 let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) = 
   let ((sl1, _)) = stmt_info.si_source_range in 
     (* let (lineLoc:int option) = sl1.sl_line in *)
@@ -379,11 +482,59 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     
 
-  | WhileStmt (stmt_info, stmt_list) -> 
-    print_endline (string_of_stmt instr); 
-    let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+  | WhileStmt (stmt_info, condition:: stmt_list) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (loop_guard:pure) = 
+      match stmt2Pure condition with 
+      | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
+      | Some p -> p
+    in 
+    let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
 
-    CValue (ev)
+    let core_lang = sequentialComposingListStmt stmts in 
+    CWhile (loop_guard, core_lang, fp)
+
+  | (IfStmt (stmt_info, condition:: stmt_list, _))  -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (conditional_guard:pure) = 
+      match stmt2Pure condition with 
+      | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
+      | Some p -> p
+    in 
+    let( (e1, e2 ) : (core_lang * core_lang)) = 
+      match stmt_list with 
+      | [] -> ( CValue UNIT,  CValue UNIT)
+      | [x] -> (convert_AST_to_core_program x, CValue UNIT)
+      | x :: y :: _ -> (convert_AST_to_core_program x, convert_AST_to_core_program y)
+    in 
+    CIfELse (conditional_guard, e1, e2, fp)
+
+
+  | UnaryOperator (stmt_info, x::_, expr_info, unary_operator_info) ->
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let varFromX = string_of_stmt x in 
+
+    let (e:core_lang) = 
+      (match unary_operator_info.uoi_kind with
+      | `PostInc -> CAssign(Var varFromX, CValue (Plus(Var varFromX, Num 1)), fp)
+      | `PostDec -> CAssign(Var varFromX, CValue (Minus(Var varFromX, Num 1)), fp)
+      | `PreInc 
+      | `PreDec
+      | `AddrOf 
+      | `Deref
+      | `Plus 
+      | `Minus 
+      | `Not 
+      | `LNot 
+      | `Real 
+      | `Imag 
+      | `Extension 
+      | `Coawait-> print_endline (string_of_unary_operator_info unary_operator_info); CValue UNIT
+
+      )
+    in e 
+
+
 
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
