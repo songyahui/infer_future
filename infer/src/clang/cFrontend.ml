@@ -149,8 +149,8 @@ and string_of_decl (dec :Clang_ast_t.decl) : string =
   | VarDecl (_, ndi, qt, vdi) -> 
     ndi.ni_name ^ "::" ^ Clang_ast_extend.type_ptr_to_string qt.qt_type_ptr
     ^" "^ (match vdi.vdi_init_expr with 
-    | None -> ""
-    | Some stmt -> string_of_stmt stmt)
+    | None -> " none"
+    | Some stmt -> " " ^ string_of_stmt stmt)
 
     (* clang_prt_raw 1305- int, 901 - char *)
   | _ ->  Clang_ast_proj.get_decl_kind_string dec
@@ -261,6 +261,9 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
   | ForStmt (stmt_info, [init; decl_stmt; condition; increment; body]) ->
     "ForStmt " ^  string_of_stmt_list ([body]) " " 
 
+  
+  | WhileStmt (stmt_info, stmt_list) ->
+    "WhileStmt " ^  string_of_stmt_list (stmt_list) " " 
   | WhileStmt (stmt_info, [condition; body]) ->
     "WhileStmt " ^  string_of_stmt_list ([body]) " " 
   | WhileStmt (stmt_info, [decl_stmt; condition; body]) ->
@@ -300,20 +303,51 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 let rec syh_compute_stmt_postcondition (current:summary) (prog: core_lang) : summary = []
 
 
+
+
 let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang = 
 
-  let sequentialComposingListStmt stmt_list fp =
-    let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
+  let sequentialComposingListStmt (stmts: core_lang list) =
 
     let rec composeStmtList (li:core_lang list): core_lang = 
       match li with 
-      | [] -> CValue (UNIT, fp) 
+      | [] -> CValue (UNIT) 
       | [x] -> x 
       | x :: xs -> CSeq(x, composeStmtList xs) 
     in 
     composeStmtList stmts
     
   in 
+
+  let core_lang_of_decl_list (dec :Clang_ast_t.decl list) fp : core_lang = 
+    let reverseDeclList = reverse dec in 
+    let rec assambleThePairs (li:Clang_ast_t.decl list) (acc: core_lang option): ((string * core_lang option * int) list) = 
+      match li with 
+      | [] -> [] 
+      | x :: xs  -> 
+        (match x with 
+        | VarDecl (_, ndi, qt, vdi) -> 
+          let varName = ndi.ni_name in 
+          let (acc': core_lang option) = 
+            (match vdi.vdi_init_expr with 
+            | None -> acc
+            | Some stmt -> Some (convert_AST_to_core_program stmt))
+          in 
+          (varName, acc', fp) :: assambleThePairs (xs) acc'
+        | _ -> []
+  
+        )
+    in 
+    let (temp:((string * core_lang option * int) list)) = assambleThePairs reverseDeclList None in 
+    let reverseBack = reverse temp in 
+    let (coreLangList:core_lang list) = flattenList (List.map reverseBack ~f:(fun (a, b, c) -> 
+      match b with 
+      | None -> [CLocal(a, c)]
+      | Some e -> [CLocal(a, c); CAssign (Var a, e, c)]
+      ))
+    in sequentialComposingListStmt coreLangList
+
+  in   
   
   
   match instr with 
@@ -321,37 +355,40 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
 
     (*print_endline ("ReturnStmt:" ^ string_of_stmt_list stmt_list " ");*)
-    CValue (UNIT, fp) 
+    CValue (UNIT) 
 
-  | CompoundStmt (stmt_info, stmt_list) -> 
+  | IntegerLiteral (stmt_info, stmt_list, expr_info, integer_literal_info) ->
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
 
-    sequentialComposingListStmt stmt_list fp
+    let int_str = integer_literal_info.ili_value in 
+
+    if String.length int_str > 18 then (CValue (Var "SYH_BIGINT"))
+    else (CValue(Num (int_of_string(int_str))))
+
+
+  | CompoundStmt (_, stmt_list) -> 
+    let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
+
+    sequentialComposingListStmt stmts
     
 
-  | DeclStmt (stmt_info, stmt_list, handlers) -> 
+  | DeclStmt (stmt_info, _, handlers) -> 
+
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-
-    (*
-    let _ = List.map handlers ~f:(fun del -> 
-    let localVar = (string_of_decl del) in 
-    let () = variablesInScope := !variablesInScope @ [localVar] in 
-
-    ()
-    ) in 
-    *)
-    sequentialComposingListStmt stmt_list fp
+    core_lang_of_decl_list handlers fp
 
     
 
-    
+  | WhileStmt (stmt_info, stmt_list) -> 
+    print_endline (string_of_stmt instr); 
+    let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
 
-
+    CValue (ev)
 
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
 
-    CValue (ev, -1)
+    CValue (ev)
 
 
 

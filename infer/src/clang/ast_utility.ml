@@ -59,7 +59,7 @@ type stack = (Exp.t * Ident.t) list
 type core_value = term
 
 type core_lang = 
-  | CValue of core_value * state
+  | CValue of core_value 
   | CLocal of string * state
   | CAssign of core_value * core_lang * state
   | CSeq of core_lang * core_lang 
@@ -345,7 +345,7 @@ let string_of_loc n = "@" ^ string_of_int n
 
 let rec string_of_core_lang (e:core_lang) :string =
   match e with
-  | CValue (v, state) -> string_of_term v ^ string_of_loc state
+  | CValue (v) -> string_of_term v 
   | CAssign (v, e, state) -> Format.sprintf "%s = %s;" (string_of_term v) (string_of_core_lang e) ^ string_of_loc state
   | CIfELse (pi, t, e, state) -> Format.sprintf "if %s then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
   | CFunCall (f, xs, state) -> Format.sprintf "%s %s" f (List.map ~f:string_of_term xs |> String.concat ~sep:" ") ^ string_of_loc state
@@ -396,3 +396,7 @@ let rec string_with_seperator f li sep =
   | [x] -> f x 
   | x :: xs  -> f x ^ sep ^ string_with_seperator f xs sep
 
+let rec reverse li = 
+  match li with 
+  | [] -> [] 
+  | x :: xs  -> reverse(xs) @ [x]
