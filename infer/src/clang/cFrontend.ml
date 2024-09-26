@@ -506,6 +506,9 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
     sequentialComposingListStmt stmts
 
+  
+
+
   | CompoundAssignOperator (stmt_info, x::y::_, _, _, _) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     (match stmt2Term x, stmt2Term y with 
@@ -622,6 +625,25 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     CSeq(init, CSeq(loop_body, loop))
 
+  | LabelStmt (_, stmt_list, label_name) -> 
+    print_endline ("LabelStmt: " ^ label_name ^ ":\n" ^ string_of_stmt_list stmt_list ";"); 
+    let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+    CValue (ev)
+
+  | GotoStmt (_, _, {Clang_ast_t.gsi_label= label_name; _}) ->
+    print_endline ("goto: " ^ label_name); 
+    let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+    CValue (ev)
+
+  | ContinueStmt (stmt_info, _) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    Continue (fp)
+  | BreakStmt (stmt_info, _)  -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    Break (fp)
+    
+     
+  
 
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 

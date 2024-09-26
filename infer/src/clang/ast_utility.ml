@@ -66,7 +66,8 @@ type core_lang =
   | CIfELse of pure * core_lang * core_lang * state
   | CFunCall of string * (core_value) list * state
   | CWhile of pure * core_lang * state
-
+  | Break of state 
+  | Continue of state 
 
 
 let rec existAux f (li:('a list)) (ele:'a) = 
@@ -350,8 +351,10 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CIfELse (pi, t, e, state) -> Format.sprintf "if (%s) then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
   | CFunCall (f, xs, state) -> Format.sprintf "%s %s" f (List.map ~f:string_of_term xs |> String.concat ~sep:" ") ^ string_of_loc state 
   | CLocal (str, state) -> Format.sprintf "local %s " str ^ string_of_loc state 
-  | CSeq (e1, e2) -> Format.sprintf "%s;\n%s;" (string_of_core_lang e1) (string_of_core_lang e2) 
+  | CSeq (e1, e2) -> Format.sprintf "%s\n%s" (string_of_core_lang e1) (string_of_core_lang e2) 
   | CWhile (pi, e, state) -> Format.sprintf "while (%s)\n {%s}" (string_of_pure pi) (string_of_core_lang e) ^ string_of_loc state 
+  | Break  state ->  "Break" ^ string_of_loc state
+  | Continue state -> "Continue" ^ string_of_loc state
 
 
 
