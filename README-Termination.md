@@ -7,4 +7,5 @@ https://sv-comp.sosy-lab.org/2024/benchmarks.php
 
 ./infer/bin/infer run --pulse-only -- clang++ -c benchmark/pulseinf/loop_conditional_non_terminate.cpp
 
+./infer/bin/infer run --pulse-only -- make --keep-going 
 ./build-infer.sh clang      
