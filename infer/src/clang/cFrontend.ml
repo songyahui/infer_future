@@ -324,6 +324,42 @@ let string_of_unary_operator_info  (unary_operator_info:Clang_ast_t.unary_operat
     | `Extension -> "Extension"
     | `Coawait-> "Coawait"
 
+let string_of_binary_operator (binary_operator_kind:Clang_ast_t.binary_operator_info)= 
+  match binary_operator_kind.boi_kind with
+  | `PtrMemD -> "PtrMemD"
+  | `PtrMemI -> "PtrMemI"
+  | `Mul -> "Mul"
+  | `Div -> "Div"
+  | `Rem -> "Rem"
+  | `Add -> "Add"
+  | `Sub -> "Sub"
+  | `Shl -> "Shl"
+  | `Shr-> "Shr"
+  | `Cmp -> "Cmp"
+  | `LT -> "LT"
+  | `GT -> "GT"
+  | `LE -> "LE"
+  | `GE -> "GE"
+  | `EQ -> "EQ"
+  | `NE -> "NE"
+  | `And -> "And"
+  | `Xor -> "Xor"
+  | `Or -> "Or"
+  | `LAnd-> "LAnd"
+  | `LOr -> "LOr"
+  | `Assign -> "Assign"
+  | `MulAssign -> "MulAssign"
+  | `DivAssign -> "DivAssign"
+  | `RemAssign -> "RemAssign"
+  | `AddAssign-> "AddAssign"
+  | `SubAssign -> "SubAssign"
+  | `ShlAssign -> "ShlAssign"
+  | `ShrAssign -> "ShrAssign"
+  | `AndAssign -> "AndAssign"
+  | `XorAssign-> "XorAssign"
+  | `OrAssign -> "OrAssign"
+  | `Comma-> "Comma"
+
 
 let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option = 
   (*print_string ("stmt2Pure" ^ Clang_ast_proj.get_stmt_kind_string instr );*)
@@ -503,7 +539,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     in 
     let( (e1, e2 ) : (core_lang * core_lang)) = 
       match stmt_list with 
-      | [] -> ( CValue UNIT,  CValue UNIT)
+      | [] -> ( CValue UNIT, CValue UNIT)
       | [x] -> (convert_AST_to_core_program x, CValue UNIT)
       | x :: y :: _ -> (convert_AST_to_core_program x, convert_AST_to_core_program y)
     in 
@@ -518,27 +554,41 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       (match unary_operator_info.uoi_kind with
       | `PostInc -> CAssign(Var varFromX, CValue (Plus(Var varFromX, Num 1)), fp)
       | `PostDec -> CAssign(Var varFromX, CValue (Minus(Var varFromX, Num 1)), fp)
-      | `PreInc 
-      | `PreDec
-      | `AddrOf 
-      | `Deref
-      | `Plus 
-      | `Minus 
-      | `Not 
-      | `LNot 
-      | `Real 
-      | `Imag 
-      | `Extension 
-      | `Coawait-> print_endline (string_of_unary_operator_info unary_operator_info); CValue UNIT
-
+      | _ -> 
+        print_endline (string_of_unary_operator_info unary_operator_info); 
+        let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+        CValue (ev)
       )
     in e 
 
+  | BinaryOperator (stmt_info, x::y::_, _, binop_info)->
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
 
+    (match stmt2Term x, stmt2Term y with 
+    | Some t1 , Some t2 -> 
+      (match binop_info.boi_kind with
+      | `Add -> CValue (Plus (t1, t2))
+      | `Sub -> CValue (Minus (t1, t2))
+      | `Assign -> CAssign (t1, CValue t2, fp)
+      | `MulAssign -> CAssign (t1, CValue (TTimes(t1, t2)), fp)
+      | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2)), fp)
+      | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2)), fp)
+      | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2)), fp)
+      | _ ->  
+        print_endline (string_of_binary_operator binop_info); 
+      
+        let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+        CValue (ev)
+      )
+    | _,  _ -> 
+      let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+      CValue (ev)
+    )
+
+    
 
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-
     CValue (ev)
 
 

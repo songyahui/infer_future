@@ -346,8 +346,8 @@ let string_of_loc n = "@" ^ string_of_int n
 let rec string_of_core_lang (e:core_lang) :string =
   match e with
   | CValue (v) -> string_of_term v 
-  | CAssign (v, e, state) -> Format.sprintf "%s = %s;" (string_of_term v) (string_of_core_lang e) ^ string_of_loc state
-  | CIfELse (pi, t, e, state) -> Format.sprintf "if %s then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
+  | CAssign (v, e, state) -> Format.sprintf "%s=%s;" (string_of_term v) (string_of_core_lang e) ^ string_of_loc state
+  | CIfELse (pi, t, e, state) -> Format.sprintf "if (%s) then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
   | CFunCall (f, xs, state) -> Format.sprintf "%s %s" f (List.map ~f:string_of_term xs |> String.concat ~sep:" ") ^ string_of_loc state
   | CLocal (str, state) -> Format.sprintf "local %s;" str ^ string_of_loc state
   | CSeq (e1, e2) -> Format.sprintf "%s;\n%s;" (string_of_core_lang e1) (string_of_core_lang e2) 
