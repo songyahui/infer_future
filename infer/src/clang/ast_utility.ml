@@ -2,7 +2,7 @@ let retKeyword = "Return"
 
 let finalReport = (ref "")
 
-let nonDetermineFunCall = ["_fun__nondet_int";"_fun___VERIFIER_nondet_int"]
+let nonDetermineFunCall = ["__nondet_int";"__VERIFIER_nondet_int"]
 
 let current_source_file = ref ""
 
@@ -31,6 +31,7 @@ type term =
     | TList of term list
 
        
+
 (*Arithimetic pure formulae*)
 type pure = TRUE
           | FALSE
@@ -58,6 +59,8 @@ type stack = (Exp.t * Ident.t) list
 
 type core_value = term
 
+type event = string * (core_value list)
+
 type core_lang = 
   | CValue of core_value 
   | CLocal of string * state
@@ -66,8 +69,10 @@ type core_lang =
   | CIfELse of pure * core_lang * core_lang * state
   | CFunCall of string * (core_value) list * state
   | CWhile of pure * core_lang * state
-  | Break of state 
-  | Continue of state 
+  | CBreak of state 
+  | CContinue of state 
+  | CLable of string * state 
+  | CGoto of string * state 
 
 
 let rec existAux f (li:('a list)) (ele:'a) = 
@@ -349,12 +354,14 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CValue (v) -> string_of_term v 
   | CAssign (v, e, state) -> Format.sprintf "%s=%s " (string_of_term v) (string_of_core_lang e) ^ string_of_loc state 
   | CIfELse (pi, t, e, state) -> Format.sprintf "if (%s) then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
-  | CFunCall (f, xs, state) -> Format.sprintf "%s %s" f (List.map ~f:string_of_term xs |> String.concat ~sep:" ") ^ string_of_loc state 
+  | CFunCall (f, xs, state) -> Format.sprintf "%s(%s)" f (List.map ~f:string_of_term xs |> String.concat ~sep:" ") ^ string_of_loc state 
   | CLocal (str, state) -> Format.sprintf "local %s " str ^ string_of_loc state 
   | CSeq (e1, e2) -> Format.sprintf "%s\n%s" (string_of_core_lang e1) (string_of_core_lang e2) 
   | CWhile (pi, e, state) -> Format.sprintf "while (%s)\n {%s}" (string_of_pure pi) (string_of_core_lang e) ^ string_of_loc state 
-  | Break  state ->  "Break" ^ string_of_loc state
-  | Continue state -> "Continue" ^ string_of_loc state
+  | CBreak  state ->  "Break" ^ string_of_loc state
+  | CContinue state -> "Continue" ^ string_of_loc state
+  | CLable (str, state) ->  str ^ ": " ^ string_of_loc state
+  | CGoto (str, state) -> "goto " ^ str ^ " " ^ string_of_loc state
 
 
 

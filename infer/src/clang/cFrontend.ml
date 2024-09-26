@@ -39,15 +39,21 @@ let compute_icfg trans_unit_ctx tenv ast =
 
 
 
-let stmt2Term_helper (op: string) (t1: term option) (t2: term option) : term option = 
+let stmt2Term_helper (op: Clang_ast_t.binary_operator_info) (t1: term option) (t2: term option) : term option = 
   match (t1, t2) with 
   | (None, _) 
   | (_, None ) -> None 
   | (Some t1, Some t2) -> 
-    let p = 
-      if String.compare op "_plus_" == 0 then Plus (t1, t2)
-    else Minus (t1, t2)
-    in Some p 
+    (match op.boi_kind with 
+    | `Add -> Some (Plus (t1, t2))
+    | `Sub -> Some (Minus (t1, t2))
+    | `Mul -> Some (TTimes (t1, t2))
+    | `Div-> Some (TDiv (t1, t2))
+    | _ -> None 
+    )
+
+
+    
 
 let rec stmt2Term (instr: Clang_ast_t.stmt) : term option = 
   (*print_endline ("term kind:" ^ Clang_ast_proj.get_stmt_kind_string instr);*)
@@ -66,11 +72,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term option =
     stmt2Term x
   
   | BinaryOperator (stmt_info, x::y::_, expr_info, binop_info)->
-    (match binop_info.boi_kind with
-    | `Add -> stmt2Term_helper "_plus_" (stmt2Term x) (stmt2Term y) 
-    | `Sub -> stmt2Term_helper "_minus_" (stmt2Term x) (stmt2Term y) 
-    | _ -> None 
-    )
+    stmt2Term_helper binop_info (stmt2Term x) (stmt2Term y) 
   | IntegerLiteral (_, stmt_list, expr_info, integer_literal_info) ->
     let int_str = integer_literal_info.ili_value in 
 
@@ -141,7 +143,9 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term option =
   | CallExpr (_, stmt_list, ei) -> 
   (match stmt_list with
   | [] -> assert false 
-  | x :: rest -> Some ((Var(string_of_stmt x ^"_" ^  string_of_stmt_list rest "_" ^ "_")))  
+  | x :: rest -> Some 
+  ((TApp(string_of_stmt x, List.map rest ~f:(fun a -> 
+  match stmt2Term a with | None -> Var "none" | Some n -> n))))  
   )
 
   | _ -> Some ((Var(Clang_ast_proj.get_stmt_kind_string instr))) 
@@ -437,6 +441,45 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 
 let rec syh_compute_stmt_postcondition (current:summary) (prog: core_lang) : summary = []
 
+let rec extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt list) : event option = 
+(match x with
+| DeclRefExpr (stmt_info, _, _, decl_ref_expr_info) -> 
+  let (sl1, sl2) = stmt_info.si_source_range in 
+  let (lineLoc:int option) = sl1.sl_line in 
+
+  (match decl_ref_expr_info.drti_decl_ref with 
+  | None -> None  
+  | Some decl_ref ->
+    (
+    match decl_ref.dr_name with 
+    | None -> None 
+    | Some named_decl_info -> 
+      Some (named_decl_info.ni_name, ((
+        List.map rest ~f:(fun r -> 
+        (*print_endline ("extractEventFromFUnctionCall " ^ Clang_ast_proj.get_stmt_kind_string r );
+        print_endline (match (stmt2Term r) with | None -> "none" | Some t -> string_of_terms t);
+        *)
+        match stmt2Term r with | None -> Var "none" | Some t -> t))))
+    )
+  )
+
+| ImplicitCastExpr (_, stmt_list, _, _, _) ->
+  (match stmt_list with 
+  | [] -> None 
+  | y :: restY -> extractEventFromFUnctionCall y rest)
+
+| BinaryOperator (_, x::_, _, _)
+| ParenExpr (_, x::_, _) -> extractEventFromFUnctionCall x rest
+| (CallExpr (_, stmt_list, _)) -> 
+  (match stmt_list with 
+  | [] -> None 
+  | x::rest -> extractEventFromFUnctionCall x rest
+  )
+
+| _ -> 
+  None 
+)
+
 let loop_guard condition = 
   match stmt2Pure condition with 
     | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
@@ -553,11 +596,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | (IfStmt (stmt_info, condition:: stmt_list, _))  -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    let (conditional_guard:pure) = 
-      match stmt2Pure condition with 
-      | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
-      | Some p -> p
-    in 
+    let (conditional_guard:pure) = loop_guard condition in 
     let( (e1, e2 ) : (core_lang * core_lang)) = 
       match stmt_list with 
       | [] -> ( CValue UNIT, CValue UNIT)
@@ -625,26 +664,33 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     CSeq(init, CSeq(loop_body, loop))
 
-  | LabelStmt (_, stmt_list, label_name) -> 
-    print_endline ("LabelStmt: " ^ label_name ^ ":\n" ^ string_of_stmt_list stmt_list ";"); 
-    let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-    CValue (ev)
+  | LabelStmt (stmt_info, stmt_list, label_name) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
+    let core_lang = sequentialComposingListStmt stmts in 
+    CSeq(CLable (label_name, fp), core_lang)
 
-  | GotoStmt (_, _, {Clang_ast_t.gsi_label= label_name; _}) ->
-    print_endline ("goto: " ^ label_name); 
-    let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-    CValue (ev)
+  | GotoStmt (stmt_info, _, {Clang_ast_t.gsi_label= label_name; _}) ->
+    (* print_endline ("goto: " ^ label_name);  *) 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    CGoto (label_name, fp)
 
   | ContinueStmt (stmt_info, _) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    Continue (fp)
+    CContinue (fp)
   | BreakStmt (stmt_info, _)  -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    Break (fp)
-    
-     
-  
+    CBreak (fp)
 
+  | CallExpr (stmt_info, x ::rest, ei) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    (match extractEventFromFUnctionCall x rest with 
+    | None -> 
+      let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
+      CValue (ev)
+    | Some (calleeName, acturelli) -> (* arli is the actual argument *)
+      CFunCall(calleeName, acturelli, fp)
+    )
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
     CValue (ev)
