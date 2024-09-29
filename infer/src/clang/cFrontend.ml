@@ -411,8 +411,8 @@ let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option =
     if String.compare (string_of_stmt instr) "0" == 0 then Some (FALSE)
     else if String.compare (string_of_stmt instr) "1" == 0 then Some (TRUE)
     else None 
+  | NullStmt _ -> Some (Ast_utility.FALSE)
 
-    
   
   | _ -> Some (Gt ((( Var (Clang_ast_proj.get_stmt_kind_string instr))), ( Var ("null"))))
 
@@ -627,15 +627,14 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2)), fp)
       | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2)), fp)
       | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2)), fp)
-      | `And -> 
-        CIfELse(PureAnd(Eq(t1, Num 1), Eq(t2, Num 1)) , CValue(Num 1) , CValue(Num 0), fp) 
-      | `Or -> 
-        CIfELse(PureOr(Eq(t1, Num 1), Eq(t2, Num 1)) , CValue(Num 1) , CValue(Num 0), fp) 
+      | `And 
+      | `Or 
+      | `NE 
+      | `EQ ->
+        let (p:pure) = loop_guard instr in 
+        CIfELse(p, CValue(Num 1), CValue(Num 0), fp)
 
-      | `NE -> 
-        CIfELse(Eq(t1, t2) , CValue(Num 0) , CValue(Num 1), fp) 
-      | `EQ -> 
-        CIfELse(Eq(t1, t2) , CValue(Num 1) , CValue(Num 0), fp) 
+
  
       | _ ->  
         print_endline (string_of_binary_operator binop_info); 
@@ -709,6 +708,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     | Some (calleeName, acturelli) -> (* arli is the actual argument *)
       CFunCall(calleeName, acturelli, fp)
     )
+  | NullStmt _ -> CValue (Nil)
+
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
     CValue (ev)
