@@ -1,6 +1,8 @@
 let retKeyword = "Return"
-
 let finalReport = (ref "")
+let verifier_counter: int ref = ref 0;;
+
+let verifier_counter_reset_to n = verifier_counter := n
 
 let nonDetermineFunCall = ["__nondet_int";"__VERIFIER_nondet_int"]
 
@@ -29,7 +31,7 @@ type term =
     | TApp of string * term list
     | TCons of term * term
     | TList of term list
-    | Member of term * term 
+    | Member of term * term list
 
        
 
@@ -54,13 +56,18 @@ type regularExpr =
   | Concate of (regularExpr * regularExpr)
   | Omega of regularExpr 
 
-type summary = (pure * regularExpr) list 
-
-type stack = (Exp.t * Ident.t) list
+type summary = (string list) * ((pure * regularExpr) list)
 
 type core_value = term
 
 type event = string * (core_value list)
+
+let verifier_getAfreeVar () :string  =
+  let prefix = "v00"
+  in
+  let x = prefix ^ string_of_int (!verifier_counter) in
+  incr verifier_counter;
+  x
 
 type core_lang = 
   | CValue of core_value 
@@ -81,9 +88,6 @@ let rec existAux f (li:('a list)) (ele:'a) =
   | [] ->  false 
   | x :: xs -> if f x ele then true else existAux f xs ele
 
-let string_of_stack (stack:stack): string = 
-  (String.concat ~sep:",\n" (List.map ~f:(fun (a, b) -> Exp.to_string a ^ " -> " ^ IR.Ident.to_string b) stack))
-
 
 let string_of_args pp args =
   match args with
@@ -99,6 +103,11 @@ let string_of_bin_op op : string =
   | EQ -> "="
   | GTEQ -> ">="
   | LTEQ -> "<="
+let rec string_of_li f li sep =
+  match li with 
+  | [] -> ""
+  | [x] -> f x 
+  | x :: xs -> f x ^ sep ^ string_of_li f xs sep
 
 let rec string_of_term t : string =
   match t with
@@ -119,7 +128,7 @@ let rec string_of_term t : string =
   | TPower (t1, t2) -> "(" ^string_of_term t1 ^ "^(" ^ string_of_term t2 ^ "))"
   | TTimes (t1, t2) -> "(" ^string_of_term t1 ^ "*" ^ string_of_term t2 ^ ")"
   | TDiv (t1, t2) -> "(" ^string_of_term t1 ^ "/" ^ string_of_term t2 ^ ")"
-  | Member (t1, t2) -> string_of_term t1 ^ "." ^ string_of_term t2 
+  | Member (t1, t2) -> string_of_term t1 ^ "." ^ string_of_li string_of_term t2 "." 
   | TApp (op, args) -> Format.asprintf "%s%s" op (string_of_args string_of_term args)
   | TList nLi ->
     let rec helper li =
@@ -355,7 +364,7 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CValue (v) -> string_of_term v 
   | CAssign (v, e, state) -> Format.sprintf "%s=%s " (string_of_term v) (string_of_core_lang e) ^ string_of_loc state 
   | CIfELse (pi, t, e, state) -> Format.sprintf "if (%s) then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
-  | CFunCall (f, xs, state) -> Format.sprintf "%s(%s)" f (List.map ~f:string_of_term xs |> String.concat ~sep:" ") ^ string_of_loc state 
+  | CFunCall (f, xs, state) -> Format.sprintf "%s(%s)" f (List.map ~f:string_of_term xs |> String.concat ~sep:",") ^ string_of_loc state 
   | CLocal (str, state) -> Format.sprintf "local %s " str ^ string_of_loc state 
   | CSeq (e1, e2) -> Format.sprintf "%s\n%s" (string_of_core_lang e1) (string_of_core_lang e2) 
   | CWhile (pi, e, state) -> Format.sprintf "while (%s)\n {%s}" (string_of_pure pi) (string_of_core_lang e) ^ string_of_loc state 
@@ -367,22 +376,25 @@ let rec string_of_core_lang (e:core_lang) :string =
 
 
 
-let rec normalise_summary summary = 
-
+let rec normalise_summary_aux summary = 
   let normalise_summary_a_pair (p, re) = (normalise_pure p, normalise_es re) in 
-
   match summary with 
   | [] -> []
-  | x :: xs -> (normalise_summary_a_pair x)  ::  (normalise_summary xs)
+  | x :: xs -> (normalise_summary_a_pair x)  ::  (normalise_summary_aux xs)
 
-let rec string_of_summary summary = 
+let normalise_summary (exs, traces) = (exs, normalise_summary_aux traces)
+
+let rec string_of_summary_aux summary = 
 
   let string_of_a_pair (p, re) = string_of_pure p ^ " /\\ " ^ string_of_regularExpr re  in 
 
   match summary with 
   | [] -> ""
   | [x] -> string_of_a_pair x
-  | x :: xs -> string_of_a_pair x  ^ " \\/ " ^ string_of_summary xs 
+  | x :: xs -> string_of_a_pair x  ^ " \\/ " ^ string_of_summary_aux xs 
+
+let string_of_summary (exs, traces) = string_of_summary_aux traces
+
 
 let rec flattenList lili = 
   match lili with 
@@ -411,3 +423,4 @@ let rec reverse li =
   match li with 
   | [] -> [] 
   | x :: xs  -> reverse(xs) @ [x]
+
