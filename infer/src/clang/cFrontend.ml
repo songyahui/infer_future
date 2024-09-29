@@ -627,6 +627,11 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2)), fp)
       | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2)), fp)
       | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2)), fp)
+      | `And -> 
+        CIfELse(PureAnd(Eq(t1, Num 1), Eq(t2, Num 1)) , CValue(Num 1) , CValue(Num 0), fp) 
+      | `Or -> 
+        CIfELse(PureOr(Eq(t1, Num 1), Eq(t2, Num 1)) , CValue(Num 1) , CValue(Num 0), fp) 
+
       | `NE -> 
         CIfELse(Eq(t1, t2) , CValue(Num 0) , CValue(Num 1), fp) 
       | `EQ -> 
