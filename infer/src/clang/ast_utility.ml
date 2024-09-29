@@ -29,6 +29,7 @@ type term =
     | TApp of string * term list
     | TCons of term * term
     | TList of term list
+    | Member of term * term 
 
        
 
@@ -118,7 +119,7 @@ let rec string_of_term t : string =
   | TPower (t1, t2) -> "(" ^string_of_term t1 ^ "^(" ^ string_of_term t2 ^ "))"
   | TTimes (t1, t2) -> "(" ^string_of_term t1 ^ "*" ^ string_of_term t2 ^ ")"
   | TDiv (t1, t2) -> "(" ^string_of_term t1 ^ "/" ^ string_of_term t2 ^ ")"
-
+  | Member (t1, t2) -> string_of_term t1 ^ "." ^ string_of_term t2 
   | TApp (op, args) -> Format.asprintf "%s%s" op (string_of_args string_of_term args)
   | TList nLi ->
     let rec helper li =

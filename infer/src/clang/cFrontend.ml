@@ -106,7 +106,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term option =
 
     let name  = string_with_seperator (fun a -> match a with | None -> "_" | Some t ->(string_of_term t)) temp "." in 
     if String.compare memArg "" == 0 then Some ((Var(name )))
-    else Some ((Var(name ^ "." ^ memArg)))
+    else Some ((Member(Var name, Var memArg)))
 
 
   | UnaryOperator (stmt_info, x::_, expr_info, op_info) ->
@@ -545,6 +545,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | ParenExpr(_, stmt_list, _) 
   | ReturnStmt  (_, stmt_list) 
   | ImplicitCastExpr (_, stmt_list, _, _, _) 
+  | CStyleCastExpr (_, stmt_list, _, _, _) 
   | CompoundStmt (_, stmt_list) -> 
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
     sequentialComposingListStmt stmts
@@ -608,12 +609,18 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | UnaryOperator (stmt_info, x::_, expr_info, unary_operator_info) ->
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    let varFromX = string_of_stmt x in 
-
+    let varFromX = 
+      match stmt2Term x with 
+      | None -> Var(string_of_stmt x) 
+      | Some t -> t
+    in 
+    
     let (e:core_lang) = 
       (match unary_operator_info.uoi_kind with
-      | `PostInc -> CAssign(Var varFromX, CValue (Plus(Var varFromX, Num 1)), fp)
-      | `PostDec -> CAssign(Var varFromX, CValue (Minus(Var varFromX, Num 1)), fp)
+      | `PostInc -> CAssign(varFromX, CValue (Plus(varFromX, Num 1)), fp)
+      | `PostDec -> CAssign(varFromX, CValue (Minus(varFromX, Num 1)), fp)
+      | `Deref -> CValue (varFromX)
+      | `Minus -> CValue (TTimes(Num (-1), varFromX))
       | _ -> 
         print_endline (string_of_unary_operator_info unary_operator_info); 
         let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
@@ -663,6 +670,16 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
 
     CSeq(init, CSeq(loop_body, loop))
+
+  | DoStmt (stmt_info, body::condition::_) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (loop_guard:pure) = loop_guard condition in 
+    let body = List.map [body] ~f:(fun a -> convert_AST_to_core_program a) in 
+    let loop_body = sequentialComposingListStmt body in 
+
+    let loop = CWhile (loop_guard, loop_body, fp)  in 
+    CSeq(loop_body, loop)
+
 
   | LabelStmt (stmt_info, stmt_list, label_name) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
