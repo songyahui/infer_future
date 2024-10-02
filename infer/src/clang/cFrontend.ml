@@ -425,9 +425,25 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 
 
 
-
-
-let rec syh_compute_stmt_postcondition (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = ([])
+let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = 
+  let (_, _, ret) = signature in 
+  match prog with 
+  | CValue (v, state) -> 
+    let (extension:regularExpr) = (Ast_utility.Singleton(Eq(Var ret, v), state)) in 
+    concateSummaries current [(TRUE, extension)]
+  | _ -> current
+  (*
+  | CLocal of string * state
+  | CAssign of core_value * core_lang * state
+  | CSeq of core_lang * core_lang 
+  | CIfELse of pure * core_lang * core_lang * state
+  | CFunCall of string * (core_value) list * state
+  | CWhile of pure * core_lang * state
+  | CBreak of state 
+  | CContinue of state 
+  | CLable of string * state 
+  | CGoto of string * state 
+  *)
 
 
 
@@ -493,11 +509,11 @@ let rec creatIntermidiateValue4execution (li:term list) state : ((core_lang list
 
 let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang = 
 
-  let sequentialComposingListStmt (stmts: core_lang list) =
+  let sequentialComposingListStmt (stmts: core_lang list) fp =
 
     let rec composeStmtList (li:core_lang list): core_lang = 
       match li with 
-      | [] -> CValue (UNIT) 
+      | [] -> CValue (UNIT, fp) 
       | [x] -> x 
       | x :: xs -> CSeq(x, composeStmtList xs) 
     in 
@@ -531,7 +547,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | None -> [CLocal(a, c)]
       | Some e -> [CLocal(a, c); CAssign (Var a, e, c)]
       ))
-    in sequentialComposingListStmt coreLangList
+    in sequentialComposingListStmt coreLangList fp
 
   in   
   
@@ -543,17 +559,18 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     let int_str = integer_literal_info.ili_value in 
 
-    if String.length int_str > 18 then (CValue (Var "SYH_BIGINT"))
-    else (CValue(Num (int_of_string(int_str))))
+    if String.length int_str > 18 then (CValue (Var "SYH_BIGINT", fp))
+    else (CValue(Num (int_of_string(int_str)), fp))
 
 
-  | ParenExpr(_, stmt_list, _) 
-  | ReturnStmt  (_, stmt_list) 
-  | ImplicitCastExpr (_, stmt_list, _, _, _) 
-  | CStyleCastExpr (_, stmt_list, _, _, _) 
-  | CompoundStmt (_, stmt_list) -> 
+  | ParenExpr(stmt_info, stmt_list, _) 
+  | ReturnStmt  (stmt_info, stmt_list) 
+  | ImplicitCastExpr (stmt_info, stmt_list, _, _, _) 
+  | CStyleCastExpr (stmt_info, stmt_list, _, _, _) 
+  | CompoundStmt (stmt_info, stmt_list) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
-    sequentialComposingListStmt stmts
+    sequentialComposingListStmt stmts fp 
 
   
 
@@ -561,24 +578,25 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | CompoundAssignOperator (stmt_info, x::y::_, _, _, _) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     (match stmt2Term x, stmt2Term y with 
-    |  t1 ,  t2 -> CAssign (t1, CValue (Plus(t1, t2)), fp)
+    |  t1 ,  t2 -> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
 
     )
        
 
-  | DeclRefExpr (_, _, _, decl_ref_expr_info) ->
+  | DeclRefExpr (stmt_info, _, _, decl_ref_expr_info) ->
     (*"DeclRefExpr "^*)
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     (match decl_ref_expr_info.drti_decl_ref with 
     | None -> 
       let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-      CValue (ev)
+      CValue (ev, fp)
     | Some decl_ref ->
       (
         match decl_ref.dr_name with 
         | None -> 
           let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-          CValue (ev)
-        | Some named_decl_info -> (CValue (Var named_decl_info.ni_name))
+          CValue (ev, fp)
+        | Some named_decl_info -> (CValue (Var named_decl_info.ni_name, fp))
       )
     )
 
@@ -595,7 +613,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (loop_guard:pure) = loop_guard condition in 
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
 
-    let core_lang = sequentialComposingListStmt stmts in 
+    let core_lang = sequentialComposingListStmt stmts fp in 
     CWhile (loop_guard, core_lang, fp)
 
   | (IfStmt (stmt_info, condition:: stmt_list, _))  -> 
@@ -603,8 +621,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (conditional_guard:pure) = loop_guard condition in 
     let( (e1, e2 ) : (core_lang * core_lang)) = 
       match stmt_list with 
-      | [] -> ( CValue UNIT, CValue UNIT)
-      | [x] -> (convert_AST_to_core_program x, CValue UNIT)
+      | [] -> ( CValue (UNIT, fp), CValue (UNIT, fp))
+      | [x] -> (convert_AST_to_core_program x, CValue (UNIT, fp))
       | x :: y :: _ -> (convert_AST_to_core_program x, convert_AST_to_core_program y)
     in 
     CIfELse (conditional_guard, e1, e2, fp)
@@ -618,16 +636,16 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (e:core_lang) = 
       (match unary_operator_info.uoi_kind with
       | `PreInc 
-      | `PostInc -> CAssign(varFromX, CValue (Plus(varFromX, Num 1)), fp)
+      | `PostInc -> CAssign(varFromX, CValue (Plus(varFromX, Num 1), fp), fp)
       | `PreDec
-      | `PostDec -> CAssign(varFromX, CValue (Minus(varFromX, Num 1)), fp)
+      | `PostDec -> CAssign(varFromX, CValue (Minus(varFromX, Num 1), fp), fp)
       | `AddrOf 
-      | `Deref -> CValue (varFromX)
-      | `Minus -> CValue (TTimes(Num (-1), varFromX))
+      | `Deref -> CValue (varFromX, fp)
+      | `Minus -> CValue (TTimes(Num (-1), varFromX), fp)
       | _ -> 
         print_endline (string_of_unary_operator_info unary_operator_info); 
         let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)])) in 
-        CValue (ev)
+        CValue (ev, fp)
       )
     in e 
 
@@ -640,19 +658,19 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     (match stmt2Term x, stmt2Term y with 
     |  t1 ,  t2 -> 
       (match binop_info.boi_kind with
-      | `Add -> CValue (Plus (t1, t2))
-      | `Sub -> CValue (Minus (t1, t2))
-      | `Assign -> CAssign (t1, CValue t2, fp)
-      | `MulAssign -> CAssign (t1, CValue (TTimes(t1, t2)), fp)
-      | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2)), fp)
-      | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2)), fp)
-      | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2)), fp)
+      | `Add -> CValue (Plus (t1, t2), fp)
+      | `Sub -> CValue (Minus (t1, t2), fp)
+      | `Assign -> CAssign (t1, CValue (t2, fp), fp)
+      | `MulAssign -> CAssign (t1, CValue (TTimes(t1, t2), fp), fp)
+      | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2), fp), fp)
+      | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
+      | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2), fp), fp)
       | `And 
       | `Or 
       | `NE 
       | `EQ ->
         let (p:pure) = loop_guard instr in 
-        CIfELse(p, CValue(Num 1), CValue(Num 0), fp)
+        CIfELse(p, CValue(Num 1, fp), CValue(Num 0, fp), fp)
 
 
  
@@ -660,16 +678,17 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
         print_endline (string_of_binary_operator binop_info); 
       
         let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)])) in 
-        CValue (ev)
+        CValue (ev, fp)
       )
     
     )
 
-  | MemberExpr (_, arlist, _, member_expr_info)  -> 
+  | MemberExpr (stmt_info, arlist, _, member_expr_info)  -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     let memArg = member_expr_info.mei_name.ni_name in 
     let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
-    if String.compare memArg "" == 0 then CValue ((Var(memArg )))
-    else CValue((Member(Var memArg, temp)))
+    if String.compare memArg "" == 0 then CValue ((Var(memArg ), fp))
+    else CValue((Member(Var memArg, temp), fp))
 
 
 
@@ -686,7 +705,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let update = convert_AST_to_core_program update in  
 
     let body = List.map body ~f:(fun a -> convert_AST_to_core_program a) in 
-    let loop_body = sequentialComposingListStmt body in 
+    let loop_body = sequentialComposingListStmt body fp in 
     let loop = CWhile (loop_guard, CSeq(loop_body, update), fp)  in 
 
 
@@ -696,7 +715,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     let (loop_guard:pure) = loop_guard condition in 
     let body = List.map [body] ~f:(fun a -> convert_AST_to_core_program a) in 
-    let loop_body = sequentialComposingListStmt body in 
+    let loop_body = sequentialComposingListStmt body fp in 
 
     let loop = CWhile (loop_guard, loop_body, fp)  in 
     CSeq(loop_body, loop)
@@ -705,7 +724,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | LabelStmt (stmt_info, stmt_list, label_name) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
-    let core_lang = sequentialComposingListStmt stmts in 
+    let core_lang = sequentialComposingListStmt stmts fp in 
     CSeq(CLable (label_name, fp), core_lang)
 
   | GotoStmt (stmt_info, _, {Clang_ast_t.gsi_label= label_name; _}) ->
@@ -724,18 +743,20 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     (match extractEventFromFUnctionCall x rest with 
     | None -> 
-      let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts
+      let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
     | Some (calleeName, acturelli) -> (* arli is the actual argument *)
-      if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall calleeName then CValue ANY
+      if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall calleeName then CValue (ANY, fp)
       else 
         let prefixCmds, acturelli' = creatIntermidiateValue4execution acturelli fp in 
-        sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, acturelli', fp))])
+        sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, acturelli', fp))]) fp
     )
-  | NullStmt _ -> CValue (Nil)
+  | NullStmt (stmt_info, _) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    CValue (Nil, fp)
 
   | _ -> 
     let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-    CValue (ev)
+    CValue (ev, -1)
 
 
 
@@ -766,11 +787,12 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
         let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
         print_endline (string_of_core_lang core_prog);
+        let signature = (funcName, parameters, "res") in 
 
-        let raw_final = (syh_compute_stmt_postcondition defultPrecondition core_prog) in 
+        let raw_final = (syh_compute_stmt_postcondition signature defultPrecondition core_prog) in 
         let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in 
 
-        let (summary:summary) = (funcName, parameters, "res") , final in 
+        let (summary:summary) =  signature, final in 
 
         summaries := !summaries @ [(summary)]
       
