@@ -14,6 +14,7 @@ type bin_op = GT | LT | EQ | GTEQ | LTEQ
 
 type term =
     | UNIT 
+    | ANY
     | Nil
     | Num of int
     | Var of string
@@ -63,7 +64,7 @@ type core_value = term
 type event = string * (core_value list)
 
 let verifier_getAfreeVar () :string  =
-  let prefix = "v00"
+  let prefix = "v"
   in
   let x = prefix ^ string_of_int (!verifier_counter) in
   incr verifier_counter;
@@ -81,7 +82,6 @@ type core_lang =
   | CContinue of state 
   | CLable of string * state 
   | CGoto of string * state 
-
 
 let rec existAux f (li:('a list)) (ele:'a) = 
   match li with 
@@ -112,6 +112,7 @@ let rec string_of_li f li sep =
 let rec string_of_term t : string =
   match t with
   | Num i -> if i >=0 then string_of_int i else  "(" ^string_of_int i^ ")"
+  | ANY -> "*"
   | UNIT -> "()"
   | Nil -> "[]"
   | TCons (a, b) -> Format.asprintf "%s::%s" (string_of_term a) (string_of_term b)

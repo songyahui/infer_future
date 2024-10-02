@@ -368,7 +368,7 @@ let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option =
     | `NE -> stmt2Pure_helper "!=" (stmt2Term x) (stmt2Term y) 
     | `And | `LAnd -> 
       (match ((stmt2Pure x ), (stmt2Pure y )) with 
-      | Some p1, Some p2 -> Some (p1) (*Some (Ast_utility.PureAnd (p1, p2))*)
+      | Some p1, Some p2 -> Some (Ast_utility.PureAnd (p1, p2))
       | Some p1, None -> Some (p1)
       | None, Some p1 -> Some (p1)
       | None, None -> None 
@@ -468,6 +468,24 @@ let loop_guard condition =
   match stmt2Pure condition with 
     | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
     | Some p -> p
+
+
+let rec creatIntermidiateValue4execution (li:term list) state : ((core_lang list) * (term list)) = 
+  match li with 
+  | [] -> [], []
+  | x :: xs  -> 
+    let cl1, tLi1  = 
+      match x with 
+      | TApp (str, terms) -> 
+        let ex = Var (verifier_getAfreeVar ()) in 
+        [(CAssign(ex, CFunCall(str, terms, state), state))], [ex]
+      | _ -> [], [x]
+        
+    in 
+    
+    let cl2, tLi2  = (creatIntermidiateValue4execution xs state) in 
+    cl1@cl2, tLi1@tLi2
+
 
 
 
@@ -706,7 +724,10 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     | None -> 
       let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts
     | Some (calleeName, acturelli) -> (* arli is the actual argument *)
-      CFunCall(calleeName, acturelli, fp)
+      if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall calleeName then CValue ANY
+      else 
+        let prefixCmds, acturelli' = creatIntermidiateValue4execution acturelli fp in 
+        sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, acturelli', fp))])
     )
   | NullStmt _ -> CValue (Nil)
 
