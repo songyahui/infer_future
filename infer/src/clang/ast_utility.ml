@@ -2,7 +2,16 @@ let retKeyword = "Return"
 let finalReport = (ref "")
 let verifier_counter: int ref = ref 0;;
 
+
 let verifier_counter_reset_to n = verifier_counter := n
+
+
+let rec string_with_seperator f li sep = 
+  match li with 
+  | [] -> ""
+  | [x] -> f x 
+  | x :: xs  -> f x ^ sep ^ string_with_seperator f xs sep
+
 
 let nonDetermineFunCall = ["__nondet_int";"__VERIFIER_nondet_int"]
 
@@ -49,15 +58,23 @@ type pure = TRUE
           | Neg of pure
           | Predicate of (string * term list)
 
+type signature = (string * (string) list * string) 
+
 type regularExpr = 
   | Bot 
   | Emp 
   | Singleton of (pure * state)
+  | RecCall of signature
   | Disjunction of (regularExpr * regularExpr)
   | Concate of (regularExpr * regularExpr)
   | Omega of regularExpr 
 
-type summary = (string list) * ((pure * regularExpr) list)
+type disjunctiveRE = ((pure * regularExpr) list)
+
+type summary = signature * disjunctiveRE
+
+let (summaries: (summary list)ref) = ref []
+
 
 type core_value = term
 
@@ -167,7 +184,9 @@ let rec string_of_pure (p:pure):string =
 
 let string_of_loc n = "@" ^ string_of_int n
 
-
+let string_of_signature (str, args, ret) = 
+  str ^ "(" ^ string_with_seperator (fun a -> a) (args@[ret]) "," ^ ")"
+  
 
 let rec string_of_regularExpr re = 
   match re with 
@@ -180,8 +199,7 @@ let rec string_of_regularExpr re =
      
   | Omega effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^w"
-
-
+  | RecCall x -> string_of_signature x
 
 let rec stricTcompareTerm (term1:term) (term2:term) : bool =
   match (term1, term2) with
@@ -377,24 +395,22 @@ let rec string_of_core_lang (e:core_lang) :string =
 
 
 
-let rec normalise_summary_aux summary = 
+let rec normalise_Disj_regularExpr summary = 
   let normalise_summary_a_pair (p, re) = (normalise_pure p, normalise_es re) in 
   match summary with 
   | [] -> []
-  | x :: xs -> (normalise_summary_a_pair x)  ::  (normalise_summary_aux xs)
+  | x :: xs -> (normalise_summary_a_pair x)  ::  (normalise_Disj_regularExpr xs)
 
-let normalise_summary (exs, traces) = (exs, normalise_summary_aux traces)
+let normalise_summary (exs, traces) = (exs, normalise_Disj_regularExpr traces)
 
-let rec string_of_summary_aux summary = 
+let rec string_of_disjunctiveRE summary = 
 
   let string_of_a_pair (p, re) = string_of_pure p ^ " /\\ " ^ string_of_regularExpr re  in 
 
   match summary with 
   | [] -> ""
   | [x] -> string_of_a_pair x
-  | x :: xs -> string_of_a_pair x  ^ " \\/ " ^ string_of_summary_aux xs 
-
-let string_of_summary (exs, traces) = string_of_summary_aux traces
+  | x :: xs -> string_of_a_pair x  ^ " \\/ " ^ string_of_disjunctiveRE xs 
 
 
 let rec flattenList lili = 
@@ -414,14 +430,18 @@ let concateSummaries s1 s2 =
   )) in 
   temp
 
-let rec string_with_seperator f li sep = 
-  match li with 
-  | [] -> ""
-  | [x] -> f x 
-  | x :: xs  -> f x ^ sep ^ string_with_seperator f xs sep
-
 let rec reverse li = 
   match li with 
   | [] -> [] 
   | x :: xs  -> reverse(xs) @ [x]
 
+let string_of_summary (signature, disjRE) = 
+  string_of_signature signature ^ " = " ^ string_of_disjunctiveRE disjRE ^ "\n"
+
+let rec string_of_summaries li = 
+  match li with 
+  | [] -> "" 
+  | x :: xs  -> 
+    string_of_summary x ^ 
+    string_of_summaries xs 
+    

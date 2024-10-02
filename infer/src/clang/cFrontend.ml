@@ -427,7 +427,9 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 
 
 
-let rec syh_compute_stmt_postcondition (current:summary) (prog: core_lang) : summary = ([], [])
+let rec syh_compute_stmt_postcondition (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = ([])
+
+
 
 let rec extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt list) : event option = 
 (match x with
@@ -759,16 +761,18 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
         print_endline ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> a) parameters "," ^ ")");
         print_endline (source_Address); 
-        let (defultPrecondition:summary) = parameters, [(Ast_utility.TRUE, Emp )] in
+        let (defultPrecondition:disjunctiveRE) = [(Ast_utility.TRUE, Emp )] in
 
         let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
         print_endline (string_of_core_lang core_prog);
 
         let raw_final = (syh_compute_stmt_postcondition defultPrecondition core_prog) in 
-        let (final:summary) = 
-          ((normalise_summary raw_final)) in 
-        print_endline (string_of_summary final);
+        let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in 
+
+        let (summary:summary) = (funcName, parameters, "res") , final in 
+
+        summaries := !summaries @ [(summary)]
       
 
       )
@@ -890,6 +894,8 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
   
   in 
+
+  List.iter ~f:(fun a -> print_endline (string_of_summary a)) !summaries; 
 
   let () = finalReport := !finalReport ^ msg in 
   let dirName = "/infer-term" in 
