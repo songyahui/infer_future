@@ -191,11 +191,11 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
   | CharacterLiteral _ -> ((Var "char")) 
 
   | CallExpr (_, stmt_list, ei) -> 
-  (match stmt_list with
-  | [] -> assert false 
-  | x :: rest -> 
-  ((TApp(string_of_stmt x, List.map rest ~f:(fun a -> stmt2Term a))))  
-  )
+    (match stmt_list with
+    | [] -> assert false 
+    | x :: rest -> 
+    ((TApp(string_of_stmt x, List.map rest ~f:(fun a -> stmt2Term a))))  
+    )
 
   | _ -> ((Var(Clang_ast_proj.get_stmt_kind_string instr ^"(!!!stmt2Term)"))) 
 
@@ -433,7 +433,7 @@ let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiv
   let (_, _, ret) = signature in 
   match prog with 
   | CValue (v, state) -> 
-    let (extension:regularExpr) = (Ast_utility.Singleton(Eq(Var ret, v), state)) in 
+    let (extension:regularExpr) = (Ast_utility.Singleton(Eq(ret, v), state)) in 
     concateSummaries current [(TRUE, extension)]
   |  CSeq (e1, e2) ->  
     let omegaRE1 = syh_compute_stmt_postcondition signature current e1 in 
@@ -444,17 +444,22 @@ let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiv
     | CValue (t, _) -> 
       let (extension:regularExpr) = (Ast_utility.Singleton(Eq(v, t), fp)) in 
       concateSummaries current [(TRUE, extension)]
+    | CFunCall (f, xs, fp) -> 
+      let ex = Var (verifier_getAfreeVar ()) in 
+      let (extension:regularExpr) = Concate(RecCall (f, xs, ex), Singleton(Eq(v, ex), fp)) in 
+      concateSummaries current [(TRUE, extension)]
     | _ -> current)
 
-  | CIfELse (p, e1, e2, fp) -> 
+  | CIfELse (p, e1, e2, _) -> 
     let current1 = enforecePure p current in 
     let current2 = enforecePure (Neg p) current in 
     let omegaRE1 = syh_compute_stmt_postcondition signature current1 e1 in 
     let omegaRE2 = syh_compute_stmt_postcondition signature current2 e2 in
     omegaRE1@omegaRE2
 
-  
-
+  | CFunCall (f, xs, _) -> 
+    let (extension:regularExpr) = RecCall (f, xs, ANY) in 
+    concateSummaries current [(TRUE, extension)]
 
   | CLocal _ 
   | _ -> current
@@ -803,16 +808,16 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
       | Some stmt -> 
 
         let funcName = named_decl_info.ni_name in 
-        let parameters = List.map (function_decl_info.fdi_parameters) ~f:(vardecl2String) in 
+        let parameters = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> Var (vardecl2String a)) in 
 
-        print_endline ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> a) parameters "," ^ ")");
+        print_endline ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
         print_endline (source_Address); 
         let (defultPrecondition:disjunctiveRE) = [(Ast_utility.TRUE, Emp )] in
 
         let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
         print_endline (string_of_core_lang core_prog);
-        let signature = (funcName, parameters, "res") in 
+        let signature = (funcName, parameters, Var "res") in 
 
         let raw_final = (syh_compute_stmt_postcondition signature defultPrecondition core_prog) in 
         let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in 

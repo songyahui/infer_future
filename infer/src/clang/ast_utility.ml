@@ -58,7 +58,7 @@ type pure = TRUE
           | Neg of pure
           | Predicate of (string * term list)
 
-type signature = (string * (string) list * string) 
+type signature = (string * (term) list * term) 
 
 type regularExpr = 
   | Bot 
@@ -185,7 +185,7 @@ let rec string_of_pure (p:pure):string =
 let string_of_loc n = "@" ^ string_of_int n
 
 let string_of_signature (str, args, ret) = 
-  str ^ "(" ^ string_with_seperator (fun a -> a) (args@[ret]) "," ^ ")"
+  str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) (args@[ret]) "," ^ ")"
   
 
 let rec string_of_regularExpr re = 
