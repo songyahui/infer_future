@@ -431,11 +431,20 @@ let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiv
   | CValue (v, state) -> 
     let (extension:regularExpr) = (Ast_utility.Singleton(Eq(Var ret, v), state)) in 
     concateSummaries current [(TRUE, extension)]
+  |  CSeq (e1, e2) ->  
+    let omegaRE1 = syh_compute_stmt_postcondition signature current e1 in 
+    let omegaRE2 = syh_compute_stmt_postcondition signature omegaRE1 e2 in
+    omegaRE2 
+
+  | CAssign (v, e, fp) -> 
+    let (extension:regularExpr) = (Ast_utility.Singleton(Eq(v, e), fp)) in 
+    concateSummaries current [(TRUE, extension)]
+
+  | CLocal _ 
   | _ -> current
+
   (*
-  | CLocal of string * state
   | CAssign of core_value * core_lang * state
-  | CSeq of core_lang * core_lang 
   | CIfELse of pure * core_lang * core_lang * state
   | CFunCall of string * (core_value) list * state
   | CWhile of pure * core_lang * state
