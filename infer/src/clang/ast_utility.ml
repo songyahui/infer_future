@@ -90,7 +90,7 @@ let verifier_getAfreeVar () :string  =
 type core_lang = 
   | CValue of core_value * state 
   | CLocal of string * state
-  | CAssign of core_value * core_value * state
+  | CAssign of core_value * core_lang * state
   | CSeq of core_lang * core_lang 
   | CIfELse of pure * core_lang * core_lang * state
   | CFunCall of string * (core_value) list * state
@@ -383,7 +383,7 @@ let string_of_loc n = "@" ^ string_of_int n
 let rec string_of_core_lang (e:core_lang) :string =
   match e with
   | CValue (v, state) -> string_of_term v ^ string_of_loc state 
-  | CAssign (v, e, state) -> Format.sprintf "%s=%s " (string_of_term v) (string_of_term e) ^ string_of_loc state 
+  | CAssign (v, e, state) -> Format.sprintf "%s=%s " (string_of_term v) (string_of_core_lang e) ^ string_of_loc state 
   | CIfELse (pi, t, e, state) -> Format.sprintf "if (%s) then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
   | CFunCall (f, xs, state) -> Format.sprintf "%s(%s)" f (List.map ~f:string_of_term xs |> String.concat ~sep:",") ^ string_of_loc state 
   | CLocal (str, state) -> Format.sprintf "local %s " str ^ string_of_loc state 

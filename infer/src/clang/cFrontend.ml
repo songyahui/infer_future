@@ -424,6 +424,10 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
   | Some n -> n )
 
 
+let enforecePure (p:pure) (re:disjunctiveRE) : disjunctiveRE = 
+  List.map re ~f:(fun (a, b) -> PureAnd(a, p), b) 
+
+
 
 let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = 
   let (_, _, ret) = signature in 
@@ -435,10 +439,22 @@ let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiv
     let omegaRE1 = syh_compute_stmt_postcondition signature current e1 in 
     let omegaRE2 = syh_compute_stmt_postcondition signature omegaRE1 e2 in
     omegaRE2 
-
   | CAssign (v, e, fp) -> 
-    let (extension:regularExpr) = (Ast_utility.Singleton(Eq(v, e), fp)) in 
-    concateSummaries current [(TRUE, extension)]
+    (match e with 
+    | CValue (t, _) -> 
+      let (extension:regularExpr) = (Ast_utility.Singleton(Eq(v, t), fp)) in 
+      concateSummaries current [(TRUE, extension)]
+    | _ -> current)
+
+  | CIfELse (p, e1, e2, fp) -> 
+    let current1 = enforecePure p current in 
+    let current2 = enforecePure (Neg p) current in 
+    let omegaRE1 = syh_compute_stmt_postcondition signature current1 e1 in 
+    let omegaRE2 = syh_compute_stmt_postcondition signature current2 e2 in
+    omegaRE1@omegaRE2
+
+  
+
 
   | CLocal _ 
   | _ -> current
