@@ -443,6 +443,8 @@ let rec findSpecifictaionSummaries (f:string) summaries : summary option =
     if String.compare fname f ==0 then Some ((fname, args, ret), re)
     else findSpecifictaionSummaries f xs 
 
+
+
 let dealWithFunctionCall (handler:term option) (f:string) (actual_args: term list) (fp:int) : disjunctiveRE = 
   match findSpecifictaionSummaries f (!summaries) with 
   | None -> 
@@ -455,22 +457,17 @@ let dealWithFunctionCall (handler:term option) (f:string) (actual_args: term lis
 
   | Some ((_, formal_args, ret), f_spec) -> 
     let substitute_mappings = actual_formal_mappings  actual_args formal_args in 
-    let returnValueMapping = 
-      (match handler with 
-      | None -> []
-      | Some h -> [(h, ret)]
-      )
-    in 
-    let f_spec' = substitute_disjunctiveRE f_spec (substitute_mappings@returnValueMapping) in 
-    f_spec'
-  
-;;
-
-
-
-
-
-
+    let f_spec' = substitute_disjunctiveRE f_spec (substitute_mappings) in 
+    (match handler with 
+    | Some h -> 
+      let (disjRet:((pure * term) list)) = getResTermFromDisjunctiveRE f_spec' in 
+      let extension = 
+        List.map ~f:(fun (pPath, ret) -> (pPath, Singleton(Eq(h, ret), fp))) disjRet
+      in 
+      concateSummaries f_spec' extension
+    
+    | None -> f_spec'
+  )
 
 
 let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = 

@@ -553,3 +553,45 @@ let substitute_disjunctiveRE (spec:disjunctiveRE) (actual_formal_mappings:((term
     let re' = substitute_RE re actual_formal_mappings in 
     (p', re')) 
   spec
+
+let rec getResTermFromPure (p:pure) : term option =
+  match p with
+  | Eq (Var str, t1) -> 
+    if String.compare str "res" == 0 then Some t1 
+    else None 
+  | PureAnd (p1, p2) 
+  | PureOr (p1, p2) ->
+    (match getResTermFromPure p1, getResTermFromPure p2 with 
+      | None, None -> None 
+      | _, Some t2 
+      | Some t2, _ -> Some t2
+      )
+  | _ -> None 
+
+let rec getResTermFromRE re : term option =    
+  match re with 
+  | Singleton (p, _)  -> getResTermFromPure p 
+  | Concate (eff1, eff2) 
+  | Disjunction (eff1, eff2) ->
+      (match getResTermFromRE eff1, getResTermFromRE eff2 with 
+      | None, None -> None 
+      | _, Some t2 
+      | Some t2, _ -> Some t2
+      )
+    
+  | Omega _  -> None 
+  | RecCall (_, _, ret) -> Some ret
+  | _ -> None 
+
+
+let rec getResTermFromDisjunctiveRE (re:disjunctiveRE) : (pure * term) list = 
+  let re = normalise_Disj_regularExpr re in 
+  let rec helper acc (p, re) = 
+    match getResTermFromRE re with 
+    | None -> acc 
+    | Some ret -> acc @ [(p, ret)] 
+  in 
+  List.fold_left ~init:[] ~f:helper re
+
+
+
