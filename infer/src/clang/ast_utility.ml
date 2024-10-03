@@ -56,7 +56,6 @@ type pure = TRUE
           | PureOr of pure * pure
           | PureAnd of pure * pure
           | Neg of pure
-          | Predicate of (string * term list)
 
 type signature = (string * (term) list * term) 
 
@@ -180,7 +179,6 @@ let rec string_of_pure (p:pure):string =
   | Neg (Eq (t1, t2)) -> "("^(string_of_term t1) ^ "!=" ^ (string_of_term t2)^")"
   | Neg (Gt (t1, t2)) -> "("^(string_of_term t1) ^ "<=" ^ (string_of_term t2)^")"
   | Neg p -> "!(" ^ string_of_pure p^")"
-  | Predicate (str, termLi) -> str ^ "(" ^ string_of_list_terms termLi ^ ")"
 
 let string_of_loc n = "@" ^ string_of_int n
 
@@ -231,8 +229,6 @@ let rec comparePure (pi1:pure) (pi2:pure):bool =
   | (PureAnd (p1, p2), PureAnd (p3, p4)) ->
       (comparePure p1 p3 && comparePure p2 p4) || (comparePure p1 p4 && comparePure p2 p3)
   | (Neg p1, Neg p2) -> comparePure p1 p2
-  | (Predicate (s1, tLi1), Predicate (s2, tLi2)) -> 
-    String.compare s1 s2 == 0  &&  compareTermList tLi1 tLi2
   | _ -> false
 
 
@@ -337,8 +333,6 @@ let rec normalise_pure (pi:pure) : pure =
   | Neg (LtEq (t1, t2)) -> Gt (t1, t2)
   | Neg piN -> Neg (normalise_pure piN)
   | PureOr (pi1,pi2) -> PureAnd (normalise_pure pi1, normalise_pure pi2)
-  | Predicate (str, termLi) -> 
-    Predicate (str, List.map termLi ~f:(normalise_terms))
 
    
 let rec normalise_es (eff:regularExpr) : regularExpr = 
@@ -448,6 +442,65 @@ let rec string_of_summaries li =
     string_of_summaries xs 
     
 
-let substitute_disjunctiveRE (spec:disjunctiveRE) (mappings:((term*term)list)): disjunctiveRE =
-  match spec with 
-  | _ -> spec 
+let substitute_term (t:term) (actual_formal_mappings:((term*term)list)): term = 
+  let rec helper li : term option  = 
+    match li with 
+    | [] -> None 
+    | (arctual, formal)::xs  -> 
+      if stricTcompareTerm formal t then Some arctual
+      else helper xs 
+  in 
+  match helper actual_formal_mappings with 
+  | None -> t 
+  | Some t' -> t'
+
+let substitute_term_pair (t1, t2) actual_formal_mappings = 
+  (substitute_term t1 actual_formal_mappings, substitute_term t2 actual_formal_mappings)
+
+
+let rec substitute_pure (p:pure) (actual_formal_mappings:((term*term)list)): pure = 
+  match p with 
+  | Gt (a, b) -> 
+    let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
+    Gt (a', b')
+
+  | Lt (a, b) -> 
+    let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
+    Lt (a', b')
+
+  | GtEq (a, b) -> 
+    let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
+    GtEq (a', b')
+
+  | LtEq (a, b) -> 
+    let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
+    LtEq (a', b')
+
+  | Eq (a, b) -> 
+    let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
+    Eq (a', b')
+
+  | PureOr (p1, p2) -> 
+    let p1' = substitute_pure p1 actual_formal_mappings in 
+    let p2' = substitute_pure p2 actual_formal_mappings in 
+    PureOr (p1', p2') 
+  | PureAnd (p1, p2)  -> 
+    let p1' = substitute_pure p1 actual_formal_mappings in 
+    let p2' = substitute_pure p2 actual_formal_mappings in 
+    PureAnd (p1', p2') 
+
+  | Neg pIn -> 
+    let pIn' = substitute_pure pIn actual_formal_mappings in 
+    Neg pIn'
+
+  | _ -> p 
+
+let substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): regularExpr = re
+
+
+let substitute_disjunctiveRE (spec:disjunctiveRE) (actual_formal_mappings:((term*term)list)): disjunctiveRE =
+  List.map ~f:(fun (p, re) -> 
+    let p' = substitute_pure p actual_formal_mappings in 
+    let re' = substitute_RE re actual_formal_mappings in 
+    (p', re')) 
+  spec
