@@ -495,7 +495,20 @@ let rec substitute_pure (p:pure) (actual_formal_mappings:((term*term)list)): pur
 
   | _ -> p 
 
-let substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): regularExpr = re
+let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): regularExpr = 
+  match re with
+  | Singleton (p, state)  -> Singleton (substitute_pure p actual_formal_mappings, state) 
+  | Concate (eff1, eff2) ->  
+    Concate(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
+  | Disjunction (eff1, eff2) ->
+    Disjunction(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
+     
+  | Omega effIn -> Omega (substitute_RE effIn actual_formal_mappings)
+  | RecCall (str, args, ret) -> 
+    let args' = List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args in 
+    RecCall (str, args', substitute_term ret actual_formal_mappings)
+  | _ -> re
+
 
 
 let substitute_disjunctiveRE (spec:disjunctiveRE) (actual_formal_mappings:((term*term)list)): disjunctiveRE =
