@@ -445,9 +445,17 @@ let rec findSpecifictaionSummaries (f:string) summaries : summary option =
 
 
 
-let dealWithFunctionCall (handler:term option) (f:string) (actual_args: term list) (fp:int) : disjunctiveRE = 
+let dealWithFunctionCall 
+  (handler:term option) 
+  (f:string) 
+  (actual_args: term list) 
+  (fp:int) : disjunctiveRE 
+  = 
+  (*print_endline ("dealWithFunctionCall " ^ f); *)
   match findSpecifictaionSummaries f (!summaries) with 
   | None -> 
+    (*print_endline ("None");*)
+
     let ex = Var (verifier_getAfreeVar ()) in 
     let extension = match handler with 
     | Some v -> Concate(RecCall (f, actual_args, ex), Singleton(Eq(v, ex), fp)) 
@@ -455,19 +463,37 @@ let dealWithFunctionCall (handler:term option) (f:string) (actual_args: term lis
     in 
     [(TRUE, extension)]
 
-  | Some ((_, formal_args, ret), f_spec) -> 
+  | Some ((_, formal_args, _), f_spec) -> 
+    
     let substitute_mappings = actual_formal_mappings  actual_args formal_args in 
     let f_spec' = substitute_disjunctiveRE f_spec (substitute_mappings) in 
+    (*
+    print_endline ("Some");
+    print_endline (string_of_disjunctiveRE f_spec);
+    print_endline (string_of_disjunctiveRE f_spec');
+    *)
+
     (match handler with 
     | Some h -> 
       let (disjRet:((pure * term) list)) = getResTermFromDisjunctiveRE f_spec' in 
-      let extension = 
-        List.map ~f:(fun (pPath, ret) -> (pPath, Singleton(Eq(h, ret), fp))) disjRet
-      in 
-      concateSummaries f_spec' extension
+      (match disjRet with 
+      | [] -> (*print_endline("empty disjRet"); *)  f_spec'
+      | xs -> 
+        print_endline(string_of_li (fun (pPath, ret) -> (string_of_pure pPath) ^ (string_of_term ret)) xs "\n" );
+        let extension = 
+          List.map ~f:(fun (pPath, ret) -> 
+            (*
+            print_endline(string_of_pure pPath);
+            print_endline(string_of_term ret);
+            *)
+            (pPath, Singleton(Eq(h, ret), fp))) xs
+        in extension)
     
-    | None -> f_spec'
-  )
+    | None -> 
+      (*print_endline("no handler");*)
+      (* f_spec' *)
+      [(TRUE, Emp)]
+    )
 
 
 let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = 
@@ -728,7 +754,12 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       (match binop_info.boi_kind with
       | `Add -> CValue (Plus (t1, t2), fp)
       | `Sub -> CValue (Minus (t1, t2), fp)
-      | `Assign -> CAssign (t1, CValue (t2, fp), fp)
+      | `Assign -> 
+        (match t2 with 
+        | TApp (op, args) ->  CAssign (t1, CFunCall (op, args, fp), fp)
+        | _ -> CAssign (t1, CValue (t2, fp), fp)
+        )
+        
       | `MulAssign -> CAssign (t1, CValue (TTimes(t1, t2), fp), fp)
       | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2), fp), fp)
       | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
