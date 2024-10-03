@@ -442,7 +442,7 @@ let rec string_of_summaries li =
     string_of_summaries xs 
     
 
-let substitute_term (t:term) (actual_formal_mappings:((term*term)list)): term = 
+let substitute_term_aux (t:term) (actual_formal_mappings:((term*term)list)): term = 
   let rec helper li : term option  = 
     match li with 
     | [] -> None 
@@ -453,6 +453,42 @@ let substitute_term (t:term) (actual_formal_mappings:((term*term)list)): term =
   match helper actual_formal_mappings with 
   | None -> t 
   | Some t' -> t'
+
+let rec substitute_term (t:term) (actual_formal_mappings:((term*term)list)): term = 
+  match t with
+  | Var _ -> substitute_term_aux t actual_formal_mappings
+
+  | TCons (a, b) -> 
+    TCons (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+  | TNot a -> TNot (substitute_term a actual_formal_mappings)
+
+  | TAnd (a, b) -> 
+    TAnd (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+
+  | TOr (a, b) -> 
+    TOr (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+  | Rel (bop, a, b) ->
+    Rel (bop, substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+
+  | Plus (a, b) ->  Plus (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+  | Minus (a, b) ->  Minus (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+  | TPower (a, b) ->  TPower (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+  | TTimes (a, b) ->  TTimes (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+  | TDiv (a, b) ->  TDiv(substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
+  | Member (a, b) -> 
+    let b' =List.map b ~f:(fun a -> substitute_term a actual_formal_mappings) in 
+    Member (substitute_term a actual_formal_mappings, b')
+  | TApp (op, args) -> 
+    let args' =List.map args ~f:(fun a -> substitute_term a actual_formal_mappings) in 
+    TApp (op, args')
+  | TList nLi -> 
+    let nLi' =List.map nLi ~f:(fun a -> substitute_term a actual_formal_mappings) in 
+    TList nLi'
+ 
+
+  | _ -> t 
+
+
 
 let substitute_term_pair (t1, t2) actual_formal_mappings = 
   (substitute_term t1 actual_formal_mappings, substitute_term t2 actual_formal_mappings)
