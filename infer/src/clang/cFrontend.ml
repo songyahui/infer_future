@@ -98,7 +98,7 @@ let stmt2Term_helper (op: Clang_ast_t.binary_operator_info) (t1: term) (t2: term
   | `Mul ->  (TTimes (t1, t2))
   | `Div->  (TDiv (t1, t2))
   | _ -> (TApp("stmt2Term_helper", [Var (string_of_binary_operator (op))])) 
-    )
+  )
     
 
 
@@ -106,7 +106,6 @@ let stmt2Term_helper (op: Clang_ast_t.binary_operator_info) (t1: term) (t2: term
 
 let rec stmt2Term (instr: Clang_ast_t.stmt) : term = 
   (*print_endline ("term kind:" ^ Clang_ast_proj.get_stmt_kind_string instr);*)
-
   match instr with 
   | ImplicitCastExpr (_, x::rest, _, _, _) 
   | AtomicExpr(_, x::rest, _, _) 
@@ -427,6 +426,51 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 let enforecePure (p:pure) (re:disjunctiveRE) : disjunctiveRE = 
   List.map re ~f:(fun (a, b) -> PureAnd(a, p), b) 
 
+let rec actual_formal_mappings arctul_args formal_args : ((term * term) list) = 
+  match arctul_args, formal_args with 
+  | [], [] -> [] 
+  | x ::xs , y::ys -> (x, y) :: (actual_formal_mappings xs ys)
+  | _, _ -> 
+    print_endline ("there is a mismatch of actual and formal arguments!!!");
+    print_endline (string_of_list_terms arctul_args); 
+    print_endline (string_of_list_terms formal_args); 
+    []
+
+let rec findSpecifictaionSummaries (f:string) summaries : summary option = 
+  match summaries with 
+  | [] -> None 
+  | ((fname, args, ret), re) :: xs  -> 
+    if String.compare fname f ==0 then Some ((fname, args, ret), re)
+    else findSpecifictaionSummaries f xs 
+
+let dealWithFunctionCall (handler:term option) (f:string) (actual_args: term list) (fp:int) : disjunctiveRE = 
+  match findSpecifictaionSummaries f (!summaries) with 
+  | None -> 
+    let ex = Var (verifier_getAfreeVar ()) in 
+    let extension = match handler with 
+    | Some v -> Concate(RecCall (f, actual_args, ex), Singleton(Eq(v, ex), fp)) 
+    | None -> RecCall (f, actual_args, ex)
+    in 
+    [(TRUE, extension)]
+
+  | Some ((_, formal_args, ret), f_spec) -> 
+    let substitute_mappings = actual_formal_mappings  actual_args formal_args in 
+    let returnValueMapping = 
+      (match handler with 
+      | None -> []
+      | Some h -> [(h, ret)]
+      )
+    in 
+    let f_spec' = substitute_disjunctiveRE f_spec (substitute_mappings@returnValueMapping) in 
+    f_spec'
+  
+;;
+
+
+
+
+
+
 
 
 let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = 
@@ -445,9 +489,8 @@ let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiv
       let (extension:regularExpr) = (Ast_utility.Singleton(Eq(v, t), fp)) in 
       concateSummaries current [(TRUE, extension)]
     | CFunCall (f, xs, fp) -> 
-      let ex = Var (verifier_getAfreeVar ()) in 
-      let (extension:regularExpr) = Concate(RecCall (f, xs, ex), Singleton(Eq(v, ex), fp)) in 
-      concateSummaries current [(TRUE, extension)]
+      let (extension) = dealWithFunctionCall (Some v) f xs fp in 
+      concateSummaries current extension
     | _ -> current)
 
   | CIfELse (p, e1, e2, _) -> 
@@ -457,9 +500,9 @@ let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiv
     let omegaRE2 = syh_compute_stmt_postcondition signature current2 e2 in
     omegaRE1@omegaRE2
 
-  | CFunCall (f, xs, _) -> 
-    let (extension:regularExpr) = RecCall (f, xs, ANY) in 
-    concateSummaries current [(TRUE, extension)]
+  | CFunCall (f, xs, fp) -> 
+    let (extension) = dealWithFunctionCall None f xs fp in 
+    concateSummaries current extension
 
   | CLocal _ 
   | _ -> current
@@ -617,15 +660,14 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     (*"DeclRefExpr "^*)
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     (match decl_ref_expr_info.drti_decl_ref with 
-    | None -> 
-      let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-      CValue (ev, fp)
+    | None ->
+      CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [], fp))
+
     | Some decl_ref ->
       (
         match decl_ref.dr_name with 
         | None -> 
-          let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-          CValue (ev, fp)
+          CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [], fp)) 
         | Some named_decl_info -> (CValue (Var named_decl_info.ni_name, fp))
       )
     )
@@ -674,8 +716,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `Minus -> CValue (TTimes(Num (-1), varFromX), fp)
       | _ -> 
         print_endline (string_of_unary_operator_info unary_operator_info); 
-        let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)])) in 
-        CValue (ev, fp)
+        CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)], fp)) 
       )
     in e 
 
@@ -706,9 +747,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
  
       | _ ->  
         print_endline (string_of_binary_operator binop_info); 
-      
-        let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)])) in 
-        CValue (ev, fp)
+        CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
       )
     
     )
@@ -785,8 +824,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     CValue (Nil, fp)
 
   | _ -> 
-    let ev = TApp ((Clang_ast_proj.get_stmt_kind_string instr, [])) in 
-    CValue (ev, -1)
+    CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
 
 
 

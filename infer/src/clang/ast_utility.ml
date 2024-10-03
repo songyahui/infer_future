@@ -447,3 +447,7 @@ let rec string_of_summaries li =
     string_of_summary x ^ 
     string_of_summaries xs 
     
+
+let substitute_disjunctiveRE (spec:disjunctiveRE) (mappings:((term*term)list)): disjunctiveRE =
+  match spec with 
+  | _ -> spec 
