@@ -455,7 +455,6 @@ let dealWithFunctionCall
   match findSpecifictaionSummaries f (!summaries) with 
   | None -> 
     (*print_endline ("None");*)
-
     let ex = Var (verifier_getAfreeVar ()) in 
     let extension = match handler with 
     | Some v -> Concate(RecCall (f, actual_args, ex), Singleton(Eq(v, ex), fp)) 
@@ -473,32 +472,26 @@ let dealWithFunctionCall
     print_endline (string_of_disjunctiveRE f_spec');
     *)
 
-    (match handler with 
-    | Some h -> 
-      let (disjRet:((pure * term) list)) = getResTermFromDisjunctiveRE f_spec' in 
-      (match disjRet with 
-      | [] -> (*print_endline("empty disjRet"); *)  f_spec'
-      | xs -> 
-        print_endline(string_of_li (fun (pPath, ret) -> (string_of_pure pPath) ^ (string_of_term ret)) xs "\n" );
-        let extension = 
-          List.map ~f:(fun (pPath, ret) -> 
+    let binder = match handler with | None -> Var "res" | Some h -> h in 
+    let (disjRet:((pure * term) list)) = getResTermFromDisjunctiveRE f_spec' in 
+    (match disjRet with 
+    | [] -> (*print_endline("empty disjRet"); *)  f_spec'
+    | xs -> 
+      print_endline(string_of_li (fun (pPath, ret) -> (string_of_pure pPath) ^ (string_of_term ret)) xs "\n" );
+      let extension = 
+        List.map ~f:(fun (pPath, ret) -> 
             (*
             print_endline(string_of_pure pPath);
             print_endline(string_of_term ret);
             *)
-            (pPath, Singleton(Eq(h, ret), fp))) xs
-        in extension)
-    
-    | None -> 
-      (*print_endline("no handler");*)
-      (* f_spec' *)
-      [(TRUE, Emp)]
-    )
-
+        (pPath, Singleton(Eq(binder, ret), fp))) xs
+      in extension)
 
 let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = 
   let (_, _, ret) = signature in 
   match prog with 
+  | CValue(TApp (op, args), fp) -> 
+    syh_compute_stmt_postcondition signature current (CFunCall(op, args, fp)) 
   | CValue (v, state) -> 
     let (extension:regularExpr) = (Ast_utility.Singleton(Eq(ret, v), state)) in 
     concateSummaries current [(TRUE, extension)]
@@ -864,6 +857,11 @@ let vardecl2String (dec: Clang_ast_t.decl): string  =
     named_decl_info.ni_name
   | _ -> Clang_ast_proj.get_decl_kind_string dec
 
+let postProcess (signature:signature) (disj_re:disjunctiveRE) : disjunctiveRE = 
+  let disj_re' = removeIntermediateRes_DisjunctiveRE disj_re in 
+  print_endline (string_of_disjunctiveRE disj_re');
+  disj_re' 
+
 let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): unit  = 
   verifier_counter_reset_to 0; 
   match dec with
@@ -886,9 +884,10 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
         let signature = (funcName, parameters, Var "res") in 
 
         let raw_final = (syh_compute_stmt_postcondition signature defultPrecondition core_prog) in 
-        let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in 
+        let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in
+        let final' = postProcess signature final in 
 
-        let (summary:summary) =  signature, final in 
+        let (summary:summary) =  signature, final' in 
 
         summaries := !summaries @ [(summary)]
       

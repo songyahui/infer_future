@@ -57,7 +57,12 @@ type pure = TRUE
           | PureAnd of pure * pure
           | Neg of pure
 
+
 type signature = (string * (term) list * term) 
+
+type firstEle = EPure of (pure * state) | ECall of signature
+
+
 
 type regularExpr = 
   | Bot 
@@ -268,6 +273,20 @@ let rec nullable (eff:regularExpr) : bool =
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
   | Omega _       -> false 
   | RecCall _ -> false 
+
+
+let rec re_fst re : firstEle list = 
+  match re with 
+  | Emp 
+  | Bot -> [] 
+  | Singleton x -> [EPure x]
+  | Concate (eff1, eff2) -> 
+    let temp = (re_fst eff1) in 
+    if nullable eff1 then temp @ (re_fst eff2  )
+    else temp
+  | Disjunction (eff1, eff2) -> (re_fst eff1) @ (re_fst eff2  )
+  | Omega re1 -> re_fst re1 
+  | RecCall x -> [ECall x]
 
 
 
@@ -593,5 +612,11 @@ let rec getResTermFromDisjunctiveRE (re:disjunctiveRE) : (pure * term) list =
   in 
   List.fold_left ~init:[] ~f:helper re
 
+let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr = 
+  re
 
+  
+;;
 
+let removeIntermediateRes_DisjunctiveRE (disj_re:disjunctiveRE) : disjunctiveRE = 
+  List.map ~f:(fun (p, re) -> p, removeIntermediateRes_regularExpr re) disj_re
