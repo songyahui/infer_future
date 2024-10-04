@@ -204,15 +204,34 @@ let rec string_of_regularExpr re =
       "(" ^ string_of_regularExpr effIn ^ ")^w"
   | RecCall x -> string_of_signature x
 
+
+
 let rec stricTcompareTerm (term1:term) (term2:term) : bool =
   match (term1, term2) with
     (Var s1, Var s2) -> String.compare s1 s2 == 0
   | (Num n1, Num n2) -> n1 == n2
-  | (Plus (tIn1, num1), Plus (tIn2, num2)) -> stricTcompareTerm tIn1 tIn2 && stricTcompareTerm num1  num2
-  | (Minus (tIn1, num1), Minus (tIn2, num2)) -> stricTcompareTerm tIn1 tIn2 && stricTcompareTerm num1  num2
-  | (UNIT, UNIT) -> true
+  | (Plus (tIn1, num1), Plus (tIn2, num2)) 
+  | (TAnd (tIn1, num1), TAnd (tIn2, num2)) 
+  | (TPower (tIn1, num1), TPower (tIn2, num2)) 
+  | (TTimes (tIn1, num1), TTimes (tIn2, num2)) 
+  | (TDiv (tIn1, num1), TDiv (tIn2, num2)) 
+  | (TOr (tIn1, num1), TOr (tIn2, num2)) 
+  | (TCons (tIn1, num1), TCons (tIn2, num2)) 
+  | (Minus (tIn1, num1), Minus (tIn2, num2)) -> 
+    stricTcompareTerm tIn1 tIn2 && stricTcompareTerm num1  num2
+  | (TNot t1, TNot t2) -> stricTcompareTerm t1 t2
+  | (TApp (s1 , tLi1), TApp(s2 , tLi2)) -> 
+    String.compare s1 s2 == 0 && stricTcompareTermList tLi1 tLi2
+  | (TList tLi1, TList tLi2) -> stricTcompareTermList tLi1 tLi2
+  | (Member (t1, tLi1), Member (t2, tLi2)) -> stricTcompareTermList (t1::tLi1) (t2::tLi2)
+  | (UNIT, UNIT) | (ANY, ANY) | (Nil, Nil) | (TTrue, TTrue) | (TFalse, TFalse) -> true
   | _ -> false
-  ;;
+
+and  stricTcompareTermList li1 li2 = 
+  match li1, li2 with 
+  | [],  [] -> true 
+  | x::xs, y::ys -> stricTcompareTerm x y && stricTcompareTermList xs ys
+  | _ , _ -> false 
 
 let rec compareTermList tl1 tl2 : bool = 
   match tl1, tl2 with 
@@ -612,8 +631,63 @@ let rec getResTermFromDisjunctiveRE (re:disjunctiveRE) : (pure * term) list =
   in 
   List.fold_left ~init:[] ~f:helper re
 
+let event2RegularExpression (ev:firstEle) : regularExpr = 
+  match ev with 
+  | EPure (p, state) -> Singleton(p, state)
+  | ECall signature -> RecCall signature
+
+
+let rec derivative (ev:firstEle) (re:regularExpr) : regularExpr = 
+  match re with 
+  | Emp | Bot -> Bot 
+  | Singleton(p, _) -> 
+    (match ev with 
+    | EPure (p1, _) -> if comparePure p p1 then Emp else Bot 
+    | _ -> Bot 
+    )
+  | Concate(re1, re2) -> 
+    let resRe1 =  Concate (derivative ev re1, re2) in 
+    if nullable re1 then Disjunction(resRe1, derivative ev re2)
+    else resRe1
+  | Disjunction(re1, re2) -> Disjunction(derivative ev re1, derivative ev re2) 
+  | Omega reIn -> Concate (derivative ev reIn, re)
+  | RecCall (fname, _ , _ ) -> 
+    (match ev with 
+    | ECall (fname1, _ , _ ) -> if String.compare fname fname1 ==0 then Emp else Bot 
+    | _ -> Bot 
+    )
+    
+
+let containsIntermediateRes ev = 
+  match ev with 
+  | EPure (Eq(Var res, _), _) -> if String.compare res "res" ==0 then true else false 
+  | _ -> false 
+
 let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr = 
-  re
+  let re = normalise_es re in 
+  match re with 
+  | Omega reIn -> Omega (removeIntermediateRes_regularExpr reIn)
+  | _ ->
+  let fstLi = re_fst re in 
+  let rec helper (evLi:firstEle list) : regularExpr = 
+    match evLi with 
+    | [] -> re 
+    | [ev] ->  
+      let deri = normalise_es (derivative ev re) in 
+      print_endline ("re: " ^string_of_regularExpr re ); 
+      print_endline ("derivatives: " ^string_of_regularExpr deri ); 
+      (match deri with 
+      | Emp -> event2RegularExpression ev 
+      | _ -> 
+        if containsIntermediateRes ev then 
+        removeIntermediateRes_regularExpr deri
+        else Concate (event2RegularExpression ev,removeIntermediateRes_regularExpr deri))
+    | ev:: xs-> 
+     let re1 = helper [ev] in 
+     let re2 = helper xs in 
+     Disjunction (re1, re2)
+  in 
+  helper fstLi 
 
   
 ;;
