@@ -21,10 +21,11 @@ type state = int
 
 type bin_op = GT | LT | EQ | GTEQ | LTEQ
 
-type term =
+type term = 
     | UNIT 
     | ANY
     | Nil
+    | RES
     | Num of int
     | Var of string
     | Plus of term * term 
@@ -60,7 +61,7 @@ type pure = TRUE
 
 type signature = (string * (term) list * term) 
 
-type firstEle = EPure of (pure * state) | ECall of signature
+type firstEle = EPure of (pure * state) | ECall of (signature * state)
 
 
 
@@ -68,7 +69,7 @@ type regularExpr =
   | Bot 
   | Emp 
   | Singleton of (pure * state)
-  | RecCall of signature
+  | RecCall of (signature *  state)
   | Disjunction of (regularExpr * regularExpr)
   | Concate of (regularExpr * regularExpr)
   | Omega of regularExpr 
@@ -132,6 +133,7 @@ let rec string_of_li f li sep =
 
 let rec string_of_term t : string =
   match t with
+  | RES -> "res"
   | Num i -> if i >=0 then string_of_int i else  "(" ^string_of_int i^ ")"
   | ANY -> "*"
   | UNIT -> "()"
@@ -202,7 +204,7 @@ let rec string_of_regularExpr re =
      
   | Omega effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^w"
-  | RecCall x -> string_of_signature x
+  | RecCall (x, state)-> string_of_signature x ^ string_of_loc state
 
 
 
@@ -224,7 +226,7 @@ let rec stricTcompareTerm (term1:term) (term2:term) : bool =
     String.compare s1 s2 == 0 && stricTcompareTermList tLi1 tLi2
   | (TList tLi1, TList tLi2) -> stricTcompareTermList tLi1 tLi2
   | (Member (t1, tLi1), Member (t2, tLi2)) -> stricTcompareTermList (t1::tLi1) (t2::tLi2)
-  | (UNIT, UNIT) | (ANY, ANY) | (Nil, Nil) | (TTrue, TTrue) | (TFalse, TFalse) -> true
+  | (UNIT, UNIT) | (ANY, ANY) | (RES, RES) | (Nil, Nil) | (TTrue, TTrue) | (TFalse, TFalse) -> true
   | _ -> false
 
 and  stricTcompareTermList li1 li2 = 
@@ -308,13 +310,10 @@ let rec re_fst re : firstEle list =
   | RecCall x -> [ECall x]
 
 
-
 let rec normalise_pure (pi:pure) : pure = 
   match pi with 
   | TRUE 
   | FALSE -> pi
-
-
   | LtEq ((Num n), (Var v)) -> GtEq ((Var v), (Num n))
   | Lt ((Num n), (Var v)) -> Gt ((Var v), (Num n))
   | Gt ((Num n), (Var v)) -> Lt ((Var v), (Num n))
@@ -325,30 +324,17 @@ let rec normalise_pure (pi:pure) : pure =
     | Plus(t1, ( Num n)) -> Gt (t1,  ( Num (-1 * n)))
     | t -> Gt(t, ( Num 0))
     )
-
-  
-    
   | LtEq (Minus(t1, t2),( Num 0)) -> LtEq (t1, t2)
-
   | Gt (Minus((Num n1),( Var v1)),( Num n2)) -> Lt((Var v1),  (Num(n1-n2)))
-  
-
-
   | Gt (t1, t2) -> Gt (normalise_terms t1, normalise_terms t2)
-
   | Lt (t1, t2) -> Lt (normalise_terms t1, normalise_terms t2)
   | GtEq (t1, t2) -> GtEq (normalise_terms t1, normalise_terms t2)
-
   | LtEq (Minus((Var x),( Num n1)), Minus(Minus((Var x1),( Var y)), ( Num n2))) -> 
     if String.compare x x1 == 0 then  LtEq((Var y), ( Num (n2-n1)))
     else LtEq (normalise_terms (Minus((Var x),( Num n1))), normalise_terms (Minus(Minus((Var x1),( Var y)), ( Num n2))))
 
   | LtEq (t1, t2) -> LtEq (normalise_terms t1, normalise_terms t2)
-
   | Eq (t1, t2) -> Eq (normalise_terms t1, normalise_terms t2)
-
-
-
   | PureAnd (pi1,pi2) -> 
     let p1 = normalise_pure pi1 in 
     let p2 = normalise_pure pi2 in 
@@ -364,7 +350,6 @@ let rec normalise_pure (pi:pure) : pure =
 
   | Neg (TRUE) -> FALSE
   | Neg (Neg(p)) -> p
-
   | Neg (Gt (t1, t2)) -> LtEq (t1, t2)
   | Neg (Lt (t1, t2)) -> GtEq (t1, t2)
   | Neg (GtEq (t1, t2)) -> Lt (t1, t2)
@@ -578,9 +563,9 @@ let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)
     Disjunction(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
      
   | Omega effIn -> Omega (substitute_RE effIn actual_formal_mappings)
-  | RecCall (str, args, ret) -> 
+  | RecCall ((str, args, ret), state) -> 
     let args' = List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args in 
-    RecCall (str, args', substitute_term ret actual_formal_mappings)
+    RecCall ((str, args', substitute_term ret actual_formal_mappings), state)
   | _ -> re
 
 
@@ -594,9 +579,7 @@ let substitute_disjunctiveRE (spec:disjunctiveRE) (actual_formal_mappings:((term
 
 let rec getResTermFromPure (p:pure) : term option =
   match p with
-  | Eq (Var str, t1) -> 
-    if String.compare str "res" == 0 then Some t1 
-    else None 
+  | Eq (RES, t1) -> Some t1 
   | PureAnd (p1, p2) 
   | PureOr (p1, p2) ->
     (match getResTermFromPure p1, getResTermFromPure p2 with 
@@ -618,7 +601,7 @@ let rec getResTermFromRE re : term option =
       )
     
   | Omega _  -> None 
-  | RecCall (_, _, ret) -> Some ret
+  | RecCall ((_, _, ret), _) -> Some ret
   | _ -> None 
 
 
@@ -651,16 +634,16 @@ let rec derivative (ev:firstEle) (re:regularExpr) : regularExpr =
     else resRe1
   | Disjunction(re1, re2) -> Disjunction(derivative ev re1, derivative ev re2) 
   | Omega reIn -> Concate (derivative ev reIn, re)
-  | RecCall (fname, _ , _ ) -> 
+  | RecCall ((fname, _ , _ ), _)-> 
     (match ev with 
-    | ECall (fname1, _ , _ ) -> if String.compare fname fname1 ==0 then Emp else Bot 
+    | ECall ((fname1, _ , _ ), _) -> if String.compare fname fname1 ==0 then Emp else Bot 
     | _ -> Bot 
     )
     
 
 let containsIntermediateRes ev = 
   match ev with 
-  | EPure (Eq(Var res, _), _) -> if String.compare res "res" ==0 then true else false 
+  | EPure (Eq(RES, _), _) -> true 
   | _ -> false 
 
 let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr = 
@@ -674,10 +657,19 @@ let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr =
     | [] -> re 
     | [ev] ->  
       let deri = normalise_es (derivative ev re) in 
+      (*
       print_endline ("re: " ^string_of_regularExpr re ); 
       print_endline ("derivatives: " ^string_of_regularExpr deri ); 
+      *)
       (match deri with 
-      | Emp -> event2RegularExpression ev 
+      | Emp -> 
+        (match ev with 
+        | EPure _ -> event2RegularExpression ev 
+        | ECall((_, _, ret), state) -> 
+          Concate (event2RegularExpression ev, 
+          Singleton(Eq(RES, ret), state))
+
+        )
       | _ -> 
         if containsIntermediateRes ev then 
         removeIntermediateRes_regularExpr deri
@@ -689,8 +681,6 @@ let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr =
   in 
   helper fstLi 
 
-  
-;;
 
 let removeIntermediateRes_DisjunctiveRE (disj_re:disjunctiveRE) : disjunctiveRE = 
   List.map ~f:(fun (p, re) -> p, removeIntermediateRes_regularExpr re) disj_re

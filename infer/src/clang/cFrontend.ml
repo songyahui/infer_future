@@ -457,8 +457,8 @@ let dealWithFunctionCall
     (*print_endline ("None");*)
     let ex = Var (verifier_getAfreeVar ()) in 
     let extension = match handler with 
-    | Some v -> Concate(RecCall (f, actual_args, ex), Singleton(Eq(v, ex), fp)) 
-    | None -> RecCall (f, actual_args, ex)
+    | Some v -> Concate(RecCall ((f, actual_args, ex), fp), Singleton(Eq(v, ex), fp)) 
+    | None -> RecCall ((f, actual_args, ex), fp)
     in 
     [(TRUE, extension)]
 
@@ -472,7 +472,7 @@ let dealWithFunctionCall
     print_endline (string_of_disjunctiveRE f_spec');
     *)
 
-    let binder = match handler with | None -> Var "res" | Some h -> h in 
+    let binder = match handler with | None -> RES | Some h -> h in 
     let (disjRet:((pure * term) list)) = getResTermFromDisjunctiveRE f_spec' in 
     (match disjRet with 
     | [] -> (*print_endline("empty disjRet"); *)  f_spec'
@@ -848,8 +848,6 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
 
 
-
-
 let vardecl2String (dec: Clang_ast_t.decl): string  = 
   match dec with 
   | VarDecl (_,  named_decl_info,  _ ,  _)
@@ -858,11 +856,11 @@ let vardecl2String (dec: Clang_ast_t.decl): string  =
   | _ -> Clang_ast_proj.get_decl_kind_string dec
 
 let postProcess (signature:signature) (disj_re:disjunctiveRE) : disjunctiveRE = 
+  print_endline (string_of_disjunctiveRE disj_re); 
   let disj_re' = removeIntermediateRes_DisjunctiveRE disj_re in 
-  print_endline (string_of_disjunctiveRE disj_re');
   disj_re' 
 
-let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): unit  = 
+let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): unit = 
   verifier_counter_reset_to 0; 
   match dec with
     | FunctionDecl ((* decl_info *) _, named_decl_info, _, function_decl_info) ->
@@ -881,7 +879,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
         let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
         print_endline (string_of_core_lang core_prog);
-        let signature = (funcName, parameters, Var "res") in 
+        let signature = (funcName, parameters, RES) in 
 
         let raw_final = (syh_compute_stmt_postcondition signature defultPrecondition core_prog) in 
         let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in
