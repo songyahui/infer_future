@@ -324,18 +324,6 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
   | RecoveryExpr (stmt_info, [], _) -> "RecoveryExpr []" 
 
   | BreakStmt _ -> "BreakStmt"
-
-    (*
-    let name  = List.fold_left temp ~init:"" ~f:(fun acc a -> 
-    acc ^ (
-      match a with
-      | None -> "_"
-      | Some t -> string_of_term t ^ "."
-    )) in 
-    (name)
-    *)
-
-
   | _ -> "string_of_stmt not yet " ^ Clang_ast_proj.get_stmt_kind_string instr;;
 
 
@@ -436,11 +424,11 @@ let rec actual_formal_mappings arctul_args formal_args : ((term * term) list) =
     print_endline (string_of_list_terms formal_args); 
     []
 
-let rec findSpecifictaionSummaries (f:string) summaries : summary option = 
+let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : (term list * effect) option = 
   match summaries with 
   | [] -> None 
-  | ((fname, args, ret), re) :: xs  -> 
-    if String.compare fname f ==0 then Some ((fname, args, ret), re)
+  | ((fname, args), re) :: xs  -> 
+    if String.compare fname f ==0 then Some (args, re)
     else findSpecifictaionSummaries f xs 
 
 
@@ -489,6 +477,18 @@ let dealWithFunctionCall
       in extension)
 *)
 
+let rec compose_effects eff1 eff2 = 
+  let rec helper (eff:singleEffect) effLi = 
+    match effLi with
+    | [] -> []
+    | x :: xs -> 
+      let (exs, p, re, fc, _) = eff in 
+      let (exs', p', re', fc', ret') = x in 
+      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc@fc', ret') :: helper eff xs
+  in 
+  match eff1 with 
+  | [] -> [] 
+  | x :: xs  -> helper x eff2 @ compose_effects xs eff2
 
 let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang) : effect = 
 
@@ -513,6 +513,22 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret)]
+
+  | CIfELse (p, e1, e2, _) -> 
+    let current1 = enforecePure p [state] in 
+    let current2 = enforecePure (Neg p) [state] in 
+    let effect1 = forward_reasoning signature current1 e1 in 
+    let effect2 = forward_reasoning signature current2 e2 in
+    effect1@effect2
+
+  | CFunCall (f, xs, fp) -> 
+    let f_summary = findSpecifictaionSummaries f !summaries in
+    (match f_summary with 
+    | None -> [state]
+    | Some (foraml,f_eff) -> 
+    compose_effects [state] (substitute_effect f_eff (actual_formal_mappings xs foraml)) 
+    )
+
   
     
   | _ -> [state]
@@ -520,32 +536,11 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   (*
 
 
-  | CAssign (v, e, fp) -> 
-    (match e with 
-    | CValue (t, _) -> 
-      let (extension:regularExpr) = (Ast_utility.Singleton(Eq(v, t), fp)) in 
-      concateSummaries current [(TRUE, extension)]
-    | CFunCall (f, xs, fp) -> 
-      let (extension) = dealWithFunctionCall (Some v) f xs fp in 
-      concateSummaries current extension
-    | _ -> current)
-
-  | CIfELse (p, e1, e2, _) -> 
-    let current1 = enforecePure p current in 
-    let current2 = enforecePure (Neg p) current in 
-    let KleeneRE1 = forward_reasoning signature current1 e1 in 
-    let KleeneRE2 = forward_reasoning signature current2 e2 in
-    KleeneRE1@KleeneRE2
 
   | CFunCall (f, xs, fp) -> 
     let (extension) = dealWithFunctionCall None f xs fp in 
     concateSummaries current extension
 
-  | CLocal _ 
-
-
-  | CAssign of core_value * core_lang * state
-  | CIfELse of pure * core_lang * core_lang * state
   | CFunCall of string * (core_value) list * state
   | CWhile of pure * core_lang * state
   | CBreak of state 
@@ -889,7 +884,6 @@ let sysfile (str:string) : bool  =
     String.compare sub "_" == 0
 
 let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): unit = 
-  verifier_counter_reset_to 0; 
   match dec with
     | FunctionDecl ((* decl_info *) _, named_decl_info, _, function_decl_info) ->
       (
@@ -911,7 +905,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
           debug_print ("=====\n" ^ string_of_core_lang core_prog ^ "\n");
-          let signature = (funcName, parameters, RES) in 
+          let signature = (funcName, parameters) in 
 
           let raw_final = (forward_reasoning signature defultPrecondition core_prog) in 
           let (final:effect) = ((normalise_effect raw_final)) in
@@ -1015,6 +1009,8 @@ let create_newdir path =
 
 
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
+  verifier_counter_reset_to 0; 
+
   let tenv = Tenv.create () in
   CType_decl.add_predefined_types tenv ;
   init_global_state_capture () ;

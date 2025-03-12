@@ -64,7 +64,7 @@ type pure = TRUE
           | Neg of pure
 
 
-type signature = (string * (term) list * term) 
+type signature = (string * (term list)) 
 
 
 type core_value = term
@@ -86,11 +86,9 @@ type regularExpr =
 
 
 
-type futureCond = 
-  | SingleFC of regularExpr 
-  | ConjFC of futureCond list
+type futureCond = regularExpr list 
 
-let fc_default = SingleFC (Kleene (Singleton ANY))
+let fc_default =  [(Kleene (Singleton ANY))]
 
 (* string list are the existential vars *)
 type singleEffect = (string list * pure * regularExpr * futureCond * string)
@@ -209,8 +207,8 @@ let rec string_of_pure (p:pure):string =
 
 let string_of_loc n = "@" ^ string_of_int n
 
-let string_of_signature (str, args, ret) = 
-  str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) (args@[ret]) "," ^ ")"
+let string_of_signature (str, args) = 
+  str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) (args) "," ^ ")"
   
 let string_of_event (ev:event) : string = 
   match ev with 
@@ -425,16 +423,11 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CLable (str, state) ->  str ^ ": " ^ string_of_loc state
   | CGoto (str, state) -> "goto " ^ str ^ " " ^ string_of_loc state
 
-let rec string_of_fc (fc:futureCond) : string = 
-  match fc with 
-  | SingleFC re -> string_of_regularExpr re
-  | ConjFC fcs -> string_with_seperator string_of_fc fcs " /\\ "
+let rec string_of_fc (fc:futureCond) : string = string_with_seperator string_of_regularExpr fc " /\\ "
 
 
-let rec normalise_fc (fc:futureCond) : futureCond = 
-  match fc with 
-  | SingleFC re -> SingleFC (normalise_es re)
-  | ConjFC fcs -> ConjFC (List.map ~f:normalise_fc fcs)
+let rec normalise_fc (fc:futureCond) : futureCond = (List.map ~f:normalise_es fc)
+
 
 let rec normalise_effect (summary:effect)  : effect = 
   let normalise_effect_a_pair (exs, p, re, fc, r) = (exs, normalise_pure p, normalise_es re, normalise_fc fc, r) in 
@@ -594,10 +587,8 @@ let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)
   | Kleene effIn -> Kleene (substitute_RE effIn actual_formal_mappings)
   | _ -> re
 
-let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = 
-    match fc with
-    | SingleFC re -> SingleFC (substitute_RE re actual_formal_mappings)
-    | ConjFC fcs -> ConjFC (List.map ~f:(fun fc -> substitute_FC fc actual_formal_mappings) fcs)
+let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = (List.map ~f:(fun fce -> substitute_RE fce actual_formal_mappings) fc)
+
   
 
 let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): effect =
