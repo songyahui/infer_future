@@ -860,6 +860,12 @@ let postProcess (signature:signature) (disj_re:disjunctiveRE) : disjunctiveRE =
   let disj_re' = removeIntermediateRes_DisjunctiveRE disj_re in 
   disj_re' 
 
+let sysfile (str:string) : bool  = 
+  if String.length str < 1 then false 
+  else 
+    let sub = String.sub str 0 1 in 
+    String.compare sub "_" == 0
+
 let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): unit = 
   verifier_counter_reset_to 0; 
   match dec with
@@ -870,24 +876,28 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
       | Some stmt -> 
 
         let funcName = named_decl_info.ni_name in 
-        let parameters = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> Var (vardecl2String a)) in 
 
-        print_endline ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
-        print_endline (source_Address); 
-        let (defultPrecondition:disjunctiveRE) = [(Ast_utility.TRUE, Emp )] in
+        if sysfile funcName then print_endline ("skipping " ^ funcName)
+        else
 
-        let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
+          (let parameters = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> Var (vardecl2String a)) in 
 
-        print_endline (string_of_core_lang core_prog);
-        let signature = (funcName, parameters, RES) in 
+          print_endline ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
+          print_endline (source_Address); 
+          let (defultPrecondition:disjunctiveRE) = [(Ast_utility.TRUE, Emp )] in
 
-        let raw_final = (syh_compute_stmt_postcondition signature defultPrecondition core_prog) in 
-        let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in
-        let final' = postProcess signature final in 
+          let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
-        let (summary:summary) =  signature, final' in 
+          print_endline ("=====\n" ^ string_of_core_lang core_prog ^ "\n");
+          let signature = (funcName, parameters, RES) in 
 
-        summaries := !summaries @ [(summary)]
+          let raw_final = (syh_compute_stmt_postcondition signature defultPrecondition core_prog) in 
+          let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in
+          let final' = postProcess signature final in 
+
+          let (summary:summary) =  signature, final' in 
+
+          summaries := !summaries @ [(summary)])
       
 
       )
@@ -947,7 +957,7 @@ let retrive_basic_info_from_AST ast_decl: (string * Clang_ast_t.decl list * int)
     | Clang_ast_t.TranslationUnitDecl (decl_info, decl_list, _, translation_unit_decl_info) ->
         let source =  translation_unit_decl_info.tudi_input_path in 
         let lines_of_code  = retriveLinesOfCode source in 
-        (source, decl_list, lines_of_code) (*, specifications, lines_of_code, lines_of_spec, number_of_protocol *)
+        (source, decl_list, lines_of_code) 
  
     | _ -> assert false
 
@@ -998,6 +1008,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
   let (source_Address, decl_list, lines_of_code) = retrive_basic_info_from_AST ast in
 
+  print_endline ("Num of decls: " ^ string_of_int ( List.length decl_list) ); 
   let start = Unix.gettimeofday () in 
   let _ = List.iter decl_list  
     ~f:(fun dec -> reason_about_declaration dec source_Address) in 
@@ -1009,6 +1020,8 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
   
   in 
+
+  print_endline ("Num of summaries: " ^ string_of_int ( List.length !summaries) ); 
 
   List.iter ~f:(fun a -> print_endline (string_of_summary a)) !summaries; 
 
