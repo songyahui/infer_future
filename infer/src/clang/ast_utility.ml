@@ -3,6 +3,11 @@ let finalReport = (ref "")
 let verifier_counter: int ref = ref 0;;
 
 
+let debug_print str = 
+  if true then print_endline (str)
+  else ()
+
+
 let verifier_counter_reset_to n = verifier_counter := n
 
 
@@ -61,29 +66,39 @@ type pure = TRUE
 
 type signature = (string * (term) list * term) 
 
-type firstEle = EPure of (pure * state) | ECall of (signature * state)
 
+type core_value = term
+
+type literal = string * (core_value list)
+
+type event = | Pos of literal | Neg of literal | ANY
+
+type firstEle = event
 
 
 type regularExpr = 
   | Bot 
   | Emp 
-  | Singleton of (pure * state)
-  | RecCall of (signature *  state)
+  | Singleton of event  
   | Disjunction of (regularExpr * regularExpr)
   | Concate of (regularExpr * regularExpr)
-  | Omega of regularExpr 
+  | Kleene of regularExpr 
 
-type disjunctiveRE = ((pure * regularExpr) list)
 
-type summary = signature * disjunctiveRE
+
+type futureCond = 
+  | SingleFC of regularExpr 
+  | ConjFC of futureCond list
+
+let fc_default = SingleFC (Kleene (Singleton ANY))
+
+type effect = ((pure * regularExpr * futureCond) list)
+
+type summary = signature * effect
 
 let (summaries: (summary list)ref) = ref []
 
 
-type core_value = term
-
-type event = string * (core_value list)
 
 let verifier_getAfreeVar () :string  =
   let prefix = "v"
@@ -192,19 +207,23 @@ let string_of_loc n = "@" ^ string_of_int n
 let string_of_signature (str, args, ret) = 
   str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) (args@[ret]) "," ^ ")"
   
+let string_of_event (ev:event) : string = 
+  match ev with 
+  | Pos (str, args) -> str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
+  | Neg (str, args) -> "!" ^ str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
+  | ANY -> "_"
 
 let rec string_of_regularExpr re = 
   match re with 
   | Bot              -> "⏊"
   | Emp              -> "𝝐 " 
-  | Singleton (p, state)  -> "(" ^string_of_pure p  ^ ")"^ string_of_loc state
+  | Singleton (ev)  ->  string_of_event ev 
   | Concate (eff1, eff2) -> string_of_regularExpr eff1 ^ " · " ^ string_of_regularExpr eff2 
   | Disjunction (eff1, eff2) ->
       "((" ^ string_of_regularExpr eff1 ^ ") \\/ (" ^ string_of_regularExpr eff2 ^ "))"
      
-  | Omega effIn          ->
-      "(" ^ string_of_regularExpr effIn ^ ")^w"
-  | RecCall (x, state)-> string_of_signature x ^ string_of_loc state
+  | Kleene effIn          ->
+      "(" ^ string_of_regularExpr effIn ^ ")^*"
 
 
 
@@ -222,8 +241,6 @@ let rec stricTcompareTerm (term1:term) (term2:term) : bool =
   | (Minus (tIn1, num1), Minus (tIn2, num2)) -> 
     stricTcompareTerm tIn1 tIn2 && stricTcompareTerm num1  num2
   | (TNot t1, TNot t2) -> stricTcompareTerm t1 t2
-  | (TApp (s1 , tLi1), TApp(s2 , tLi2)) -> 
-    String.compare s1 s2 == 0 && stricTcompareTermList tLi1 tLi2
   | (TList tLi1, TList tLi2) -> stricTcompareTermList tLi1 tLi2
   | (Member (t1, tLi1), Member (t2, tLi2)) -> stricTcompareTermList (t1::tLi1) (t2::tLi2)
   | (UNIT, UNIT) | (ANY, ANY) | (RES, RES) | (Nil, Nil) | (TTrue, TTrue) | (TFalse, TFalse) -> true
@@ -292,22 +309,20 @@ let rec nullable (eff:regularExpr) : bool =
   | Singleton _ -> false
   | Concate (eff1, eff2) -> nullable eff1 && nullable eff2  
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
-  | Omega _       -> false 
-  | RecCall _ -> false 
+  | Kleene _       -> false 
 
 
 let rec re_fst re : firstEle list = 
   match re with 
   | Emp 
   | Bot -> [] 
-  | Singleton x -> [EPure x]
+  | Singleton x -> [x]
   | Concate (eff1, eff2) -> 
     let temp = (re_fst eff1) in 
     if nullable eff1 then temp @ (re_fst eff2  )
     else temp
   | Disjunction (eff1, eff2) -> (re_fst eff1) @ (re_fst eff2  )
-  | Omega re1 -> re_fst re1 
-  | RecCall x -> [ECall x]
+  | Kleene re1 -> re_fst re1 
 
 
 let rec normalise_pure (pi:pure) : pure = 
@@ -374,24 +389,18 @@ let rec normalise_es (eff:regularExpr) : regularExpr =
     let es1 = normalise_es es1 in 
     let es2 = normalise_es es2 in 
     (match (es1, es2) with 
-    | (Singleton (TRUE, _), _)
     | (Emp, _) -> normalise_es es2
-    | (_, Singleton (TRUE, _))
     | (_, Emp) -> normalise_es es1
     | (Bot, _) -> Bot
     | (_, Bot) -> Bot
-    | (Omega _, _) -> es1
+    | (Kleene _, _) -> es1
     (*| (Disjunction (es11, es12), es3) -> Disjunction(normalise_es (Concate (es11,es3)),  normalise_es (Concate (es12, es3))) *)
     | (Concate (es11, es12), es3) -> (Concate (es11, normalise_es (Concate (es12, es3))))
     | _ -> (Concate (es1, es2))
     )
-  | Omega effIn -> 
+  | Kleene effIn -> 
     let effIn' = normalise_es effIn in 
-    Omega (effIn')
-
-
-
-  | Singleton (p, state) ->  Singleton (normalise_pure p, state)
+    Kleene (effIn')
 
   | _ -> eff 
 
@@ -411,25 +420,31 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CLable (str, state) ->  str ^ ": " ^ string_of_loc state
   | CGoto (str, state) -> "goto " ^ str ^ " " ^ string_of_loc state
 
+let rec string_of_fc (fc:futureCond) : string = 
+  match fc with 
+  | SingleFC re -> string_of_regularExpr re
+  | ConjFC fcs -> string_with_seperator string_of_fc fcs " /\\ "
 
 
+let rec normalise_fc (fc:futureCond) : futureCond = 
+  match fc with 
+  | SingleFC re -> SingleFC (normalise_es re)
+  | ConjFC fcs -> ConjFC (List.map ~f:normalise_fc fcs)
 
-let rec normalise_Disj_regularExpr summary = 
-  let normalise_summary_a_pair (p, re) = (normalise_pure p, normalise_es re) in 
+let rec normalise_effect (summary:effect)  : effect = 
+  let normalise_effect_a_pair (p, re, fc) = (normalise_pure p, normalise_es re, normalise_fc fc) in 
   match summary with 
   | [] -> []
-  | x :: xs -> (normalise_summary_a_pair x)  ::  (normalise_Disj_regularExpr xs)
+  | x :: xs -> (normalise_effect_a_pair x)  ::  (normalise_effect xs)
 
-let normalise_summary (exs, traces) = (exs, normalise_Disj_regularExpr traces)
+let rec string_of_effect summary = 
 
-let rec string_of_disjunctiveRE summary = 
-
-  let string_of_a_pair (p, re) = string_of_pure p ^ " /\\ " ^ string_of_regularExpr re  in 
+  let string_of_a_pair (p, re, fc) = string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc  in 
 
   match summary with 
   | [] -> ""
   | [x] -> string_of_a_pair x
-  | x :: xs -> string_of_a_pair x  ^ " \\/ " ^ string_of_disjunctiveRE xs 
+  | x :: xs -> string_of_a_pair x  ^ " \\/ " ^ string_of_effect xs 
 
 
 let rec flattenList lili = 
@@ -455,7 +470,7 @@ let rec reverse li =
   | x :: xs  -> reverse(xs) @ [x]
 
 let string_of_summary (signature, disjRE) = 
-  string_of_signature signature ^ " = " ^ string_of_disjunctiveRE disjRE ^ "\n"
+  string_of_signature signature ^ " = " ^ string_of_effect disjRE ^ "\n"
 
 let rec string_of_summaries li = 
   match li with 
@@ -554,44 +569,43 @@ let rec substitute_pure (p:pure) (actual_formal_mappings:((term*term)list)): pur
 
   | _ -> p 
 
+let substitute_event (ev:event) (actual_formal_mappings:((term*term)list)): event = 
+  match ev with 
+  | Pos (str, args) -> Pos (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
+  | Neg (str, args) -> Neg (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
+  | ANY -> ANY
+
 let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): regularExpr = 
   match re with
-  | Singleton (p, state)  -> Singleton (substitute_pure p actual_formal_mappings, state) 
+  | Singleton ev  -> Singleton (substitute_event ev actual_formal_mappings) 
   | Concate (eff1, eff2) ->  
     Concate(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
   | Disjunction (eff1, eff2) ->
     Disjunction(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
      
-  | Omega effIn -> Omega (substitute_RE effIn actual_formal_mappings)
-  | RecCall ((str, args, ret), state) -> 
-    let args' = List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args in 
-    RecCall ((str, args', substitute_term ret actual_formal_mappings), state)
+  | Kleene effIn -> Kleene (substitute_RE effIn actual_formal_mappings)
   | _ -> re
 
+let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = 
+    match fc with
+    | SingleFC re -> SingleFC (substitute_RE re actual_formal_mappings)
+    | ConjFC fcs -> ConjFC (List.map ~f:(fun fc -> substitute_FC fc actual_formal_mappings) fcs)
+  
 
-
-let substitute_disjunctiveRE (spec:disjunctiveRE) (actual_formal_mappings:((term*term)list)): disjunctiveRE =
-  List.map ~f:(fun (p, re) -> 
+let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): effect =
+  List.map ~f:(fun (p, re, fc) -> 
     let p' = substitute_pure p actual_formal_mappings in 
     let re' = substitute_RE re actual_formal_mappings in 
-    (p', re')) 
+    let fc' = substitute_FC fc actual_formal_mappings in 
+
+    (p', re', fc')) 
   spec
 
-let rec getResTermFromPure (p:pure) : term option =
-  match p with
-  | Eq (RES, t1) -> Some t1 
-  | PureAnd (p1, p2) 
-  | PureOr (p1, p2) ->
-    (match getResTermFromPure p1, getResTermFromPure p2 with 
-      | None, None -> None 
-      | _, Some t2 
-      | Some t2, _ -> Some t2
-      )
-  | _ -> None 
+
 
 let rec getResTermFromRE re : term option =    
   match re with 
-  | Singleton (p, _)  -> getResTermFromPure p 
+  | Singleton _  -> None
   | Concate (eff1, eff2) 
   | Disjunction (eff1, eff2) ->
       (match getResTermFromRE eff1, getResTermFromRE eff2 with 
@@ -600,26 +614,21 @@ let rec getResTermFromRE re : term option =
       | Some t2, _ -> Some t2
       )
     
-  | Omega _  -> None 
-  | RecCall ((_, _, ret), _) -> Some ret
+  | Kleene _  -> None 
   | _ -> None 
 
 
-let rec getResTermFromDisjunctiveRE (re:disjunctiveRE) : (pure * term) list = 
-  let re = normalise_Disj_regularExpr re in 
-  let rec helper acc (p, re) = 
+let rec getResTermFromeffect (re:effect) : (pure * term) list = 
+  let (re:effect) = normalise_effect re in 
+  let rec helper acc (p, re, fc) = 
     match getResTermFromRE re with 
     | None -> acc 
     | Some ret -> acc @ [(p, ret)] 
   in 
   List.fold_left ~init:[] ~f:helper re
 
-let event2RegularExpression (ev:firstEle) : regularExpr = 
-  match ev with 
-  | EPure (p, state) -> Singleton(p, state)
-  | ECall signature -> RecCall signature
 
-
+(*
 let rec derivative (ev:firstEle) (re:regularExpr) : regularExpr = 
   match re with 
   | Emp | Bot -> Bot 
@@ -633,23 +642,12 @@ let rec derivative (ev:firstEle) (re:regularExpr) : regularExpr =
     if nullable re1 then Disjunction(resRe1, derivative ev re2)
     else resRe1
   | Disjunction(re1, re2) -> Disjunction(derivative ev re1, derivative ev re2) 
-  | Omega reIn -> Concate (derivative ev reIn, re)
-  | RecCall ((fname, _ , _ ), _)-> 
-    (match ev with 
-    | ECall ((fname1, _ , _ ), _) -> if String.compare fname fname1 ==0 then Emp else Bot 
-    | _ -> Bot 
-    )
-    
-
-let containsIntermediateRes ev = 
-  match ev with 
-  | EPure (Eq(RES, _), _) -> true 
-  | _ -> false 
+  | Kleene reIn -> Concate (derivative ev reIn, re)
 
 let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr = 
   let re = normalise_es re in 
   match re with 
-  | Omega reIn -> Omega (removeIntermediateRes_regularExpr reIn)
+  | Kleene reIn -> Kleene (removeIntermediateRes_regularExpr reIn)
   | _ ->
   let fstLi = re_fst re in 
   let rec helper (evLi:firstEle list) : regularExpr = 
@@ -682,5 +680,9 @@ let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr =
   helper fstLi 
 
 
-let removeIntermediateRes_DisjunctiveRE (disj_re:disjunctiveRE) : disjunctiveRE = 
-  List.map ~f:(fun (p, re) -> p, removeIntermediateRes_regularExpr re) disj_re
+let removeIntermediateRes_effect (disj_re:effect) : effect = 
+  List.map ~f:(fun (p, re, fc) -> p, removeIntermediateRes_regularExpr re, fc) disj_re
+
+*)
+
+

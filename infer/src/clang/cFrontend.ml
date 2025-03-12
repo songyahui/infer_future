@@ -423,8 +423,8 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
   | Some n -> n )
 
 
-let enforecePure (p:pure) (re:disjunctiveRE) : disjunctiveRE = 
-  List.map re ~f:(fun (a, b) -> PureAnd(a, p), b) 
+let enforecePure (p:pure) (re:effect) : effect = 
+  List.map re ~f:(fun (a, b, c) -> PureAnd(a, p), b, c) 
 
 let rec actual_formal_mappings arctul_args formal_args : ((term * term) list) = 
   match arctul_args, formal_args with 
@@ -445,11 +445,12 @@ let rec findSpecifictaionSummaries (f:string) summaries : summary option =
 
 
 
+(*
 let dealWithFunctionCall 
   (handler:term option) 
   (f:string) 
   (actual_args: term list) 
-  (fp:int) : disjunctiveRE 
+  (fp:int) : effect 
   = 
   (*print_endline ("dealWithFunctionCall " ^ f); *)
   match findSpecifictaionSummaries f (!summaries) with 
@@ -460,20 +461,20 @@ let dealWithFunctionCall
     | Some v -> Concate(RecCall ((f, actual_args, ex), fp), Singleton(Eq(v, ex), fp)) 
     | None -> RecCall ((f, actual_args, ex), fp)
     in 
-    [(TRUE, extension)]
+    [(TRUE, extension, )]
 
   | Some ((_, formal_args, _), f_spec) -> 
     
     let substitute_mappings = actual_formal_mappings  actual_args formal_args in 
-    let f_spec' = substitute_disjunctiveRE f_spec (substitute_mappings) in 
+    let f_spec' = substitute_effect f_spec (substitute_mappings) in 
     (*
     print_endline ("Some");
-    print_endline (string_of_disjunctiveRE f_spec);
-    print_endline (string_of_disjunctiveRE f_spec');
+    print_endline (string_of_effect f_spec);
+    print_endline (string_of_effect f_spec');
     *)
 
     let binder = match handler with | None -> RES | Some h -> h in 
-    let (disjRet:((pure * term) list)) = getResTermFromDisjunctiveRE f_spec' in 
+    let (disjRet:((pure * term) list)) = getResTermFromeffect f_spec' in 
     (match disjRet with 
     | [] -> (*print_endline("empty disjRet"); *)  f_spec'
     | xs -> 
@@ -486,19 +487,24 @@ let dealWithFunctionCall
             *)
         (pPath, Singleton(Eq(binder, ret), fp))) xs
       in extension)
+*)
 
-let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiveRE) (prog: core_lang) : disjunctiveRE = 
+let rec forward_reasoning (signature:signature) (current:effect) (prog: core_lang) : effect = 
   let (_, _, ret) = signature in 
   match prog with 
-  | CValue(TApp (op, args), fp) -> 
-    syh_compute_stmt_postcondition signature current (CFunCall(op, args, fp)) 
+    
+  | _ -> current
+
+  (*
+    | CValue(t, fp) -> 
+
   | CValue (v, state) -> 
     let (extension:regularExpr) = (Ast_utility.Singleton(Eq(ret, v), state)) in 
-    concateSummaries current [(TRUE, extension)]
+    concateSummaries current [(TRUE, extension, fc_default)]
   |  CSeq (e1, e2) ->  
-    let omegaRE1 = syh_compute_stmt_postcondition signature current e1 in 
-    let omegaRE2 = syh_compute_stmt_postcondition signature omegaRE1 e2 in
-    omegaRE2 
+    let KleeneRE1 = forward_reasoning signature current e1 in 
+    let KleeneRE2 = forward_reasoning signature KleeneRE1 e2 in
+    KleeneRE2 
   | CAssign (v, e, fp) -> 
     (match e with 
     | CValue (t, _) -> 
@@ -512,18 +518,17 @@ let rec syh_compute_stmt_postcondition (signature:signature) (current:disjunctiv
   | CIfELse (p, e1, e2, _) -> 
     let current1 = enforecePure p current in 
     let current2 = enforecePure (Neg p) current in 
-    let omegaRE1 = syh_compute_stmt_postcondition signature current1 e1 in 
-    let omegaRE2 = syh_compute_stmt_postcondition signature current2 e2 in
-    omegaRE1@omegaRE2
+    let KleeneRE1 = forward_reasoning signature current1 e1 in 
+    let KleeneRE2 = forward_reasoning signature current2 e2 in
+    KleeneRE1@KleeneRE2
 
   | CFunCall (f, xs, fp) -> 
     let (extension) = dealWithFunctionCall None f xs fp in 
     concateSummaries current extension
 
   | CLocal _ 
-  | _ -> current
 
-  (*
+
   | CAssign of core_value * core_lang * state
   | CIfELse of pure * core_lang * core_lang * state
   | CFunCall of string * (core_value) list * state
@@ -549,8 +554,7 @@ let rec extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt
     match decl_ref.dr_name with 
     | None -> None 
     | Some named_decl_info -> 
-      Some (named_decl_info.ni_name, ((
-        List.map rest ~f:stmt2Term)))
+      Some (Pos (named_decl_info.ni_name, ((List.map rest ~f:stmt2Term))))
     )
   )
 
@@ -832,13 +836,13 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | CallExpr (stmt_info, x ::rest, ei) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     (match extractEventFromFUnctionCall x rest with 
-    | None -> 
-      let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
-    | Some (calleeName, acturelli) -> (* arli is the actual argument *)
+    | Some (Pos(calleeName, acturelli)) -> (* arli is the actual argument *)
       if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall calleeName then CValue (ANY, fp)
       else 
         let prefixCmds, acturelli' = creatIntermidiateValue4execution acturelli fp in 
         sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, acturelli', fp))]) fp
+    | _ -> 
+        let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
     )
   | NullStmt (stmt_info, _) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
@@ -855,9 +859,9 @@ let vardecl2String (dec: Clang_ast_t.decl): string  =
     named_decl_info.ni_name
   | _ -> Clang_ast_proj.get_decl_kind_string dec
 
-let postProcess (signature:signature) (disj_re:disjunctiveRE) : disjunctiveRE = 
-  print_endline (string_of_disjunctiveRE disj_re); 
-  let disj_re' = removeIntermediateRes_DisjunctiveRE disj_re in 
+let postProcess (signature:signature) (disj_re:effect) : effect = 
+  debug_print (string_of_effect disj_re); 
+  let disj_re' = normalise_effect disj_re in 
   disj_re' 
 
 let sysfile (str:string) : bool  = 
@@ -877,22 +881,22 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
         let funcName = named_decl_info.ni_name in 
 
-        if sysfile funcName then print_endline ("skipping " ^ funcName)
+        if sysfile funcName then () (*print_endline ("skipping " ^ funcName) *)
         else
 
           (let parameters = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> Var (vardecl2String a)) in 
 
-          print_endline ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
-          print_endline (source_Address); 
-          let (defultPrecondition:disjunctiveRE) = [(Ast_utility.TRUE, Emp )] in
+          debug_print ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
+          (*debug_print (source_Address);  *)
+          let (defultPrecondition:effect) = [(Ast_utility.TRUE, Emp, fc_default )] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
-          print_endline ("=====\n" ^ string_of_core_lang core_prog ^ "\n");
+          debug_print ("=====\n" ^ string_of_core_lang core_prog ^ "\n");
           let signature = (funcName, parameters, RES) in 
 
-          let raw_final = (syh_compute_stmt_postcondition signature defultPrecondition core_prog) in 
-          let (final:disjunctiveRE) = ((normalise_Disj_regularExpr raw_final)) in
+          let raw_final = (forward_reasoning signature defultPrecondition core_prog) in 
+          let (final:effect) = ((normalise_effect raw_final)) in
           let final' = postProcess signature final in 
 
           let (summary:summary) =  signature, final' in 
