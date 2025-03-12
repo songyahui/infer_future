@@ -424,7 +424,7 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 
 
 let enforecePure (p:pure) (re:effect) : effect = 
-  List.map re ~f:(fun (a, b, c) -> PureAnd(a, p), b, c) 
+  List.map re ~f:(fun (exs, a, b, c, r) -> (exs, PureAnd(a, p), b, c, r)) 
 
 let rec actual_formal_mappings arctul_args formal_args : ((term * term) list) = 
   match arctul_args, formal_args with 
@@ -489,22 +489,37 @@ let dealWithFunctionCall
       in extension)
 *)
 
-let rec forward_reasoning (signature:signature) (current:effect) (prog: core_lang) : effect = 
-  let (_, _, ret) = signature in 
-  match prog with 
+
+let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang) : effect = 
+
+  let rec aux expr (state:singleEffect) : effect = 
+  let (exs, p, re, fc, ret) = state in
+
+  match expr with 
+  | CValue(t, fp) -> 
+    let r = verifier_getAfreeVar t  in 
+    [(exs@[r], PureAnd(p, Eq(Var r, t)), re , fc, r)]
+  
+  | CSeq (e1, e2) -> 
+    let effect1 = aux e1 state in
+    let effect2 = forward_reasoning signature effect1 e2 in
+    effect2 
+  
+  | CAssign (v, e, fp) -> 
+    let effect1 = aux e state in 
+    let r = verifier_getAfreeVar v in 
+    let effect1' = substitute_effect effect1 [(Var r, v)] in 
+    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@[r], PureAnd(p, Eq(v, Var ret)), re, fc, "_")) effect1'
     
-  | _ -> current
+    
+  | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret)]
+  
+    
+  | _ -> [state]
 
   (*
-    | CValue(t, fp) -> 
 
-  | CValue (v, state) -> 
-    let (extension:regularExpr) = (Ast_utility.Singleton(Eq(ret, v), state)) in 
-    concateSummaries current [(TRUE, extension, fc_default)]
-  |  CSeq (e1, e2) ->  
-    let KleeneRE1 = forward_reasoning signature current e1 in 
-    let KleeneRE2 = forward_reasoning signature KleeneRE1 e2 in
-    KleeneRE2 
+
   | CAssign (v, e, fp) -> 
     (match e with 
     | CValue (t, _) -> 
@@ -538,6 +553,9 @@ let rec forward_reasoning (signature:signature) (current:effect) (prog: core_lan
   | CLable of string * state 
   | CGoto of string * state 
   *)
+  in 
+  List.fold_left ~f:(fun acc a -> acc @ aux prog a) ~init:[] states 
+
 
 
 
@@ -588,7 +606,7 @@ let rec creatIntermidiateValue4execution (li:term list) state : ((core_lang list
     let cl1, tLi1  = 
       match x with 
       | TApp (str, terms) -> 
-        let ex = Var (verifier_getAfreeVar ()) in 
+        let ex = Var (verifier_getAfreeVar UNIT) in 
         [(CAssign(ex, CFunCall(str, terms, state), state))], [ex]
       | _ -> [], [x]
         
@@ -888,7 +906,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           debug_print ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
-          let (defultPrecondition:effect) = [(Ast_utility.TRUE, Emp, fc_default )] in
+          let (defultPrecondition:effect) = [([], Ast_utility.TRUE, Emp, fc_default, "_" )] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 

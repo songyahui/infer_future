@@ -92,7 +92,9 @@ type futureCond =
 
 let fc_default = SingleFC (Kleene (Singleton ANY))
 
-type effect = ((pure * regularExpr * futureCond) list)
+(* string list are the existential vars *)
+type singleEffect = (string list * pure * regularExpr * futureCond * string)
+type effect = (singleEffect list)
 
 type summary = signature * effect
 
@@ -100,8 +102,11 @@ let (summaries: (summary list)ref) = ref []
 
 
 
-let verifier_getAfreeVar () :string  =
-  let prefix = "v"
+let verifier_getAfreeVar term :string  =
+  let prefix =
+    match term with 
+    | Var str -> str
+    | _ -> "v"
   in
   let x = prefix ^ string_of_int (!verifier_counter) in
   incr verifier_counter;
@@ -432,14 +437,17 @@ let rec normalise_fc (fc:futureCond) : futureCond =
   | ConjFC fcs -> ConjFC (List.map ~f:normalise_fc fcs)
 
 let rec normalise_effect (summary:effect)  : effect = 
-  let normalise_effect_a_pair (p, re, fc) = (normalise_pure p, normalise_es re, normalise_fc fc) in 
+  let normalise_effect_a_pair (exs, p, re, fc, r) = (exs, normalise_pure p, normalise_es re, normalise_fc fc, r) in 
   match summary with 
   | [] -> []
   | x :: xs -> (normalise_effect_a_pair x)  ::  (normalise_effect xs)
 
-let rec string_of_effect summary = 
+let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
+  
 
-  let string_of_a_pair (p, re, fc) = string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc  in 
+let rec string_of_effect (summary:effect) = 
+
+  let string_of_a_pair (exs, p, re, fc, r) = string_of_exs exs ^ ". "^ string_of_pure (PureAnd (p, Eq (RES, Var r))) ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc  in 
 
   match summary with 
   | [] -> ""
@@ -593,12 +601,12 @@ let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list))
   
 
 let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): effect =
-  List.map ~f:(fun (p, re, fc) -> 
+  List.map ~f:(fun (exs, p, re, fc, r) -> 
     let p' = substitute_pure p actual_formal_mappings in 
     let re' = substitute_RE re actual_formal_mappings in 
     let fc' = substitute_FC fc actual_formal_mappings in 
 
-    (p', re', fc')) 
+    (exs, p', re', fc', r)) 
   spec
 
 
@@ -617,15 +625,6 @@ let rec getResTermFromRE re : term option =
   | Kleene _  -> None 
   | _ -> None 
 
-
-let rec getResTermFromeffect (re:effect) : (pure * term) list = 
-  let (re:effect) = normalise_effect re in 
-  let rec helper acc (p, re, fc) = 
-    match getResTermFromRE re with 
-    | None -> acc 
-    | Some ret -> acc @ [(p, ret)] 
-  in 
-  List.fold_left ~init:[] ~f:helper re
 
 
 (*
