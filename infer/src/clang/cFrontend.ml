@@ -873,7 +873,7 @@ let vardecl2String (dec: Clang_ast_t.decl): string  =
   | _ -> Clang_ast_proj.get_decl_kind_string dec
 
 let postProcess (signature:signature) (disj_re:effect) : effect = 
-  debug_print (string_of_effect disj_re); 
+  (*debug_print (string_of_effect disj_re);  *) 
   let disj_re' = normalise_effect disj_re in 
   disj_re' 
 
@@ -1007,6 +1007,73 @@ let create_newdir path =
       Unix.mkdir path ~perm:full_permission
   with Sys_error _ -> ()
 
+let retriveComments (source:string) : (string list) = 
+  (*print_endline (source); *) 
+  let partitions = Str.split (Str.regexp "/\*@") source in 
+  (* print_endline (string_of_int (List.length partitions)); *)
+  match partitions with 
+  | [] -> [](*assert false*) 
+  | _ :: rest -> (*  SYH: Note that specification can't start from line 1 *)
+  let partitionEnd = List.map rest ~f:(fun a -> Str.split (Str.regexp "@\*/")  a) in 
+  let rec helper (li: string list list): string list = 
+    match li with 
+    | [] -> []
+    | x :: xs  -> 
+      (match List.hd x with
+      | None -> helper xs 
+      | Some head -> 
+        if String.compare head "" ==0 then helper xs 
+        else 
+          let ele = ("/*@" ^ head ^ "@*/") in 
+          (ele :: helper xs)  ) 
+  in 
+  let temp = helper partitionEnd in 
+  temp
+  
+
+let retriveSpecifications (source:string) : (Ast_utility.summary list * int * int) = 
+  try
+    let ic = open_in source in
+
+      let lines =  (input_lines ic ) in
+      let rec helper (li:string list) = 
+        match li with 
+        | [] -> ""
+        | x :: xs -> x ^ "\n" ^ helper xs 
+      in 
+      let line = helper lines in
+      
+      let partitions = retriveComments line in (*in *)
+      let line_of_spec = List.fold_left partitions ~init:0 ~f:(fun acc a -> acc + (List.length (Str.split (Str.regexp "\n") a)))  in 
+      (*
+      if List.length partitions == 0 then ()
+      else print_endline ("Global specifictaions are: ")); *)
+      let user_sepcifications = List.map partitions 
+        ~f:(fun singlespec -> 
+          (*print_endline (singlespec ^ "\n");*)
+          (*Parser.summary Lexer.token (Lexing.from_string singlespec) *)
+          ()
+          
+          ) in
+      
+      (*
+      let _ = List.map sepcifications ~f:(fun (_ , pre, post, future) -> print_endline (string_of_function_sepc (pre, post, future) ) ) in 
+      *)
+
+      close_in ic ;                 (* 关闭输入通道 *)
+      ([], line_of_spec, List.length partitions)
+
+      (*
+            flush stdin;                (* 现在写入默认设备 *)
+      print_string (List.fold_left (fun acc a -> acc ^ forward_verification a progs) "" progs ) ; 
+      *)
+
+    with e ->                      (* 一些不可预见的异常发生 *)
+      ([], 0, 0)
+
+   ;;
+
+
 
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
   verifier_counter_reset_to 0; 
@@ -1026,6 +1093,12 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
   let (source_Address, decl_list, lines_of_code) = retrive_basic_info_from_AST ast in
 
+
+  let path = Sys.getcwd () in
+  print_endline (path);
+  let (user_sepcifications, lines_of_spec, number_of_protocol) = retriveSpecifications (path ^ "/spec.c") in 
+  
+
   print_endline ("Num of decls: " ^ string_of_int ( List.length decl_list) ); 
   let start = Unix.gettimeofday () in 
   let _ = List.iter decl_list  
@@ -1039,7 +1112,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   
   in 
 
-  print_endline ("Num of summaries: " ^ string_of_int ( List.length !summaries) ); 
+  print_endline ("\n=====\nNum of summaries: " ^ string_of_int ( List.length !summaries) ); 
 
   List.iter ~f:(fun a -> print_endline (string_of_summary a)) !summaries; 
 
