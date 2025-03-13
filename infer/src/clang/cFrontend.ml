@@ -1053,7 +1053,7 @@ let retriveSpecifications (source:string) : (Ast_utility.summary list * int * in
 
     let user_sepcifications = List.map partitions 
         ~f:(fun singlespec -> 
-        (*debug_print ("singlespec: " ^ singlespec ^ "\n"); *) 
+        debug_print ("singlespec: " ^ singlespec ^ "\n");  
           let summaries = Parser.summary Lexer.token (Lexing.from_string singlespec) in 
           debug_print (string_of_summary summaries);
 

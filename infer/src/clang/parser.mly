@@ -29,13 +29,29 @@
 %type <(Ast_utility.effect)> effect
 %type <(Ast_utility.es)> es_or_ltl
 %type <(Ast_utility.ltl)> ltl
-*)
 %type <(Ast_utility.term)> term
+
+*)
+
+%type <(Ast_utility.term list)> list_of_formalArgs
+%type <(string list)> separated_list(COMMA, VAR)
+
 %%
+
+list_of_formalArgs:
+| tLi=separated_list(COMMA, VAR) {List.map ~f:(fun a -> Var a) tLi}
+
+
+signature: 
+| str = VAR  LPAR tLi=list_of_formalArgs RPAR  {(str, tLi)}
+
+summary:
+| LSPEC s=signature EQ  RSPEC   {(s, [])}
+
+(*
 
 
 term:
-| LPAR RPAR {UNIT}
 | UNDERLINE {ANY}
 | i = INTE{Num ( i) }
 | v = VAR {Var v} 
@@ -43,16 +59,6 @@ term:
 | a = term b = INTE {Minus (a, Basic( BINT (0 -  b)))}
 | LPAR a = term MINUS b = term RPAR {Minus (a, b )}
 | LPAR a = term PLUS b = term RPAR {Plus (a, b)}
-
-
-signature: 
-| str = VAR {(str, [])}
-
-summary:
-EOF {(("_", []), [])}
-| LSPEC s=signature LPAR RPAR RSPEC  {(s, [])}
-
-(*
 
 
 
