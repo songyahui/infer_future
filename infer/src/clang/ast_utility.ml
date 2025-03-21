@@ -92,7 +92,7 @@ type futureCond = regularExpr list
 let fc_default =  [(Kleene (Singleton ANY))]
 
 (* string list are the existential vars *)
-type singleEffect = (string list * pure * regularExpr * futureCond * string)
+type singleEffect = (string list * pure * regularExpr * futureCond * term)
 type effect = (singleEffect list)
 
 type precondition = pure 
@@ -203,11 +203,11 @@ let rec string_of_pure (p:pure):string =
   | LtEq (t1, t2) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2) (*"≤"*)
   | Eq (t1, t2) -> (string_of_term t1) ^ "=" ^ (string_of_term t2)
   | PureOr (p1, p2) -> "("^string_of_pure p1 ^ "∨" ^ string_of_pure p2^")"
-  | PureAnd (p1, p2) -> string_of_pure p1 ^ "∧" ^ string_of_pure p2 
+  | PureAnd (p1, p2) -> string_of_pure p1 ^ "∧ " ^ string_of_pure p2 
   | Neg (Eq (t1, t2)) -> (string_of_term t1) ^ "!=" ^ (string_of_term t2)
   | Neg (Gt (t1, t2)) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2)
   | Neg p -> "!(" ^ string_of_pure p^")"
-  | Exists (str, p) -> "∃" ^ string_of_li (fun a -> a) str " "  ^ string_of_pure p
+  | Exists (str, p) -> "∃" ^ string_of_li (fun a -> a) str " "  ^ string_of_pure p ^ ". "
 
 let string_of_loc n = "@" ^ string_of_int n
 
@@ -444,7 +444,7 @@ let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
 
 let rec string_of_effect (summary:effect) = 
 
-  let string_of_a_pair (exs, p, re, fc, r) = string_of_exs exs ^ ". "^ string_of_pure (PureAnd (p, Eq (RES, Var r))) ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc  in 
+  let string_of_a_pair (exs, p, re, fc, r) = "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r in 
 
   match summary with 
   | [] -> ""
@@ -593,16 +593,19 @@ let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)
 
 let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = (List.map ~f:(fun fce -> substitute_RE fce actual_formal_mappings) fc)
 
-  
+let substitute_single_effect (spec:singleEffect) (actual_formal_mappings:((term*term)list)): singleEffect =
+  let (exs, p, re, fc, r) = spec in 
+  let p' = substitute_pure p actual_formal_mappings in 
+  let re' = substitute_RE re actual_formal_mappings in 
+  let fc' = substitute_FC fc actual_formal_mappings in 
+  let r' = substitute_term r actual_formal_mappings in 
+  (exs, p', re', fc', r')
 
 let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): effect =
-  List.map ~f:(fun (exs, p, re, fc, r) -> 
-    let p' = substitute_pure p actual_formal_mappings in 
-    let re' = substitute_RE re actual_formal_mappings in 
-    let fc' = substitute_FC fc actual_formal_mappings in 
-
-    (exs, p', re', fc', r)) 
+  List.map ~f:(fun single -> 
+    substitute_single_effect single actual_formal_mappings) 
   spec
+
 
 
 

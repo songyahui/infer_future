@@ -145,6 +145,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
   | NullStmt _ -> ((Var ("NULL")))
 
   | ArraySubscriptExpr (_, arlist, _)  -> 
+
     let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
     (*print_endline (string_of_int (List.length temp)); *)
    ((Var(string_with_seperator  (fun a -> (string_of_term a)) temp ".")))
@@ -155,7 +156,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
 
     let name  = string_with_seperator (fun a ->(string_of_term a)) temp "." in 
     if String.compare memArg "" == 0 then ((Var(name )))
-    else ((Member(Var name, temp)))
+    else ((Member(Var name, [Var memArg])))
 
 
   | UnaryOperator (stmt_info, x::_, expr_info, op_info) ->
@@ -247,14 +248,6 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
     let name  = string_with_seperator string_of_term temp "." in 
     if String.compare memArg "" == 0 then name 
     else name ^ "." ^ memArg
-    (*
-    let name  = List.fold_left temp ~init:"" ~f:(fun acc a -> 
-    acc ^ (
-      match a with
-      | None -> "_"
-      | Some t -> string_of_term t ^ "."
-    )) in name^memArg
-    *)
 
   | IntegerLiteral (_, stmt_list, expr_info, integer_literal_info) ->
     (*"IntegerLiteral " ^*) integer_literal_info.ili_value
@@ -414,7 +407,7 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 let enforecePure (p:pure) (re:effect) : effect = 
   List.map re ~f:(fun (exs, a, b, c, r) -> (exs, PureAnd(a, p), b, c, r)) 
 
-let rec actual_formal_mappings arctul_args formal_args : ((term * term) list) = 
+let rec actual_formal_mappings (arctul_args:term list) (formal_args:term list) : ((term * term) list) = 
   match arctul_args, formal_args with 
   | [], [] -> [] 
   | x ::xs , y::ys -> (x, y) :: (actual_formal_mappings xs ys)
@@ -424,71 +417,34 @@ let rec actual_formal_mappings arctul_args formal_args : ((term * term) list) =
     print_endline (string_of_list_terms formal_args); 
     []
 
-let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : (term list * pure * effect) option = 
+let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : summary option = 
   match summaries with 
   | [] -> None 
   | ((fname, args), preC, re) :: xs  -> 
-    if String.compare fname f ==0 then Some (args, preC, re)
+    if String.compare fname f ==0 then Some ((fname, args), preC, re)
     else findSpecifictaionSummaries f xs 
 
+let add_exs exs1 effect : effect = 
+  List.map ~f:(fun (exs, p, re, fc, r) -> (exs@exs1, p, re, fc, r)) effect 
 
-
-(*
-let dealWithFunctionCall 
-  (handler:term option) 
-  (f:string) 
-  (actual_args: term list) 
-  (fp:int) : effect 
-  = 
-  (*print_endline ("dealWithFunctionCall " ^ f); *)
-  match findSpecifictaionSummaries f (!summaries) with 
-  | None -> 
-    (*print_endline ("None");*)
-    let ex = Var (verifier_getAfreeVar ()) in 
-    let extension = match handler with 
-    | Some v -> Concate(RecCall ((f, actual_args, ex), fp), Singleton(Eq(v, ex), fp)) 
-    | None -> RecCall ((f, actual_args, ex), fp)
-    in 
-    [(TRUE, extension, )]
-
-  | Some ((_, formal_args, _), f_spec) -> 
-    
-    let substitute_mappings = actual_formal_mappings  actual_args formal_args in 
-    let f_spec' = substitute_effect f_spec (substitute_mappings) in 
-    (*
-    print_endline ("Some");
-    print_endline (string_of_effect f_spec);
-    print_endline (string_of_effect f_spec');
-    *)
-
-    let binder = match handler with | None -> RES | Some h -> h in 
-    let (disjRet:((pure * term) list)) = getResTermFromeffect f_spec' in 
-    (match disjRet with 
-    | [] -> (*print_endline("empty disjRet"); *)  f_spec'
-    | xs -> 
-      print_endline(string_of_li (fun (pPath, ret) -> (string_of_pure pPath) ^ (string_of_term ret)) xs "\n" );
-      let extension = 
-        List.map ~f:(fun (pPath, ret) -> 
-            (*
-            print_endline(string_of_pure pPath);
-            print_endline(string_of_term ret);
-            *)
-        (pPath, Singleton(Eq(binder, ret), fp))) xs
-      in extension)
-*)
-
-let rec compose_effects eff1 eff2 = 
-  let rec helper (eff:singleEffect) effLi = 
-    match effLi with
+let rec compose_effects (eff:singleEffect) eff2 = 
+    match eff2 with
     | [] -> []
     | x :: xs -> 
       let (exs, p, re, fc, _) = eff in 
       let (exs', p', re', fc', ret') = x in 
-      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc@fc', ret') :: helper eff xs
-  in 
-  match eff1 with 
-  | [] -> [] 
-  | x :: xs  -> helper x eff2 @ compose_effects xs eff2
+      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc@fc', ret') :: compose_effects eff xs
+
+
+let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)) (newr:string): singleEffect = 
+  let (exs, p, es, fc, ret) = spec in 
+  let (newexs:string list) = List.map ~f:(fun a -> verifier_getAfreeVar (Var a)) exs in 
+  let string2Term li = (List.map ~f:(fun a -> Var a) li) in   
+  let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2Term newexs) (string2Term exs) in 
+
+  substitute_single_effect (newexs, p, es, fc, ret) (mappings@ exs_mappsing @[(Var newr, ret)])
+
+  
 
 let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang) : effect = 
 
@@ -498,7 +454,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   match expr with 
   | CValue(t, fp) -> 
     let r = verifier_getAfreeVar t  in 
-    [(exs@[r], PureAnd(p, Eq(Var r, t)), re , fc, r)]
+    [(exs@[r], PureAnd(p, Eq(Var r, t)), re , fc, Var r)]
   
   | CSeq (e1, e2) -> 
     let effect1 = aux e1 state in
@@ -509,7 +465,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let effect1 = aux e state in 
     let r = verifier_getAfreeVar v in 
     let effect1' = substitute_effect effect1 [(Var r, v)] in 
-    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@[r], PureAnd(p, Eq(v, Var ret)), re, fc, "_")) effect1'
+    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@[r], PureAnd(p, Eq(v, ret)), re, fc, Var "_")) effect1'
     
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret)]
@@ -525,8 +481,35 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let f_summary = findSpecifictaionSummaries f !summaries in
     (match f_summary with 
     | None -> [state]
-    | Some (foraml,preC, f_eff) -> 
-    compose_effects [state] (substitute_effect f_eff (actual_formal_mappings xs foraml)) 
+    | Some summary -> 
+      debug_print ("current state : " ^ string_of_effect [state]); 
+      debug_print ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
+      debug_print ("callee spec : " ^ string_of_summary summary); 
+
+      let (_, foramlArgs), preC, postSummary = summary in 
+      let r = verifier_getAfreeVar UNIT in 
+
+      let mappings = (actual_formal_mappings xs foramlArgs)  in 
+
+      let constriants4Mapping = List.fold_left ~f:(fun acc (a, f) -> PureAnd(acc, Eq(a, f))) mappings ~init:TRUE in 
+
+      debug_print ("constriants4Mapping = "  ^ string_of_pure constriants4Mapping);
+
+
+      (* Check pre condition *) 
+      if false (* TBD *) then [state]
+      else (
+        (* Compose pre condition *) 
+        let substitutedSummary = List.fold_left 
+          ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings r]) ~init:[] postSummary  in 
+
+
+        debug_print ("substitutedSummary : " ^ string_of_effect substitutedSummary); 
+
+        let composeStates =  add_exs [r] (compose_effects state substitutedSummary) in 
+        debug_print ("composeStates : " ^ string_of_effect composeStates); 
+        composeStates
+      )
     )
 
   
@@ -900,7 +883,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           debug_print ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
-          let (defultPrecondition:effect) = [([], Ast_utility.TRUE, Emp, fc_default, "_" )] in
+          let (defultPrecondition:effect) = [([], Ast_utility.TRUE, Emp, fc_default, Var "_" )] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
@@ -1100,7 +1083,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   *)
   current_source_file := source_file ; 
 
-  print_endline ("File analysed : \"" ^ source_file ^ "\"");  
+  print_endline ("File analysed : \"" ^ source_file ^ "\"\n");  
 
   let (source_Address, decl_list, lines_of_code) = retrive_basic_info_from_AST ast in
 
@@ -1109,7 +1092,6 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   let (user_sepcifications, lines_of_spec, number_of_protocol) = retriveSpecifications (path ^ "/spec.c") in 
   
 
-  print_endline ("Num of decls: " ^ string_of_int ( List.length decl_list) ); 
   let start = Unix.gettimeofday () in 
   let _ = List.iter decl_list  
     ~f:(fun dec -> reason_about_declaration dec source_Address) in 

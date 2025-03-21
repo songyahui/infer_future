@@ -17,3 +17,5 @@ int main() {
   free(p.f); 
   return 0; 
 }
+
+//./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'

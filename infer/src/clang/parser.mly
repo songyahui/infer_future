@@ -125,7 +125,7 @@ futureCond:
 | s = es {[s]}
 | li= futureCond CONJ s = es {li@[s]}
 
-singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=VAR RPAR {(strs, p, es, fc, r)}
+singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=VAR RPAR {(strs, p, es, fc, Var r)}
 
 effect:
 | s = singleEffect {[s]}
