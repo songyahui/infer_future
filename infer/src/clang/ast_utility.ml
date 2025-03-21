@@ -1,3 +1,5 @@
+open Z3
+
 let retKeyword = "Return"
 let finalReport = (ref "")
 let verifier_counter: int ref = ref 0;;
@@ -682,4 +684,115 @@ let removeIntermediateRes_effect (disj_re:effect) : effect =
 
 *)
 
+let counter : int ref = ref 0 ;;
 
+
+let (historyTable: ((string * bool)list)ref) = ref [] ;;
+
+let rec existInhistoryTable pi table= 
+  match table with 
+  | [] -> None
+  | (x, b)::xs -> 
+    if String.compare x (string_of_pure pi) == 0 then Some b 
+    else existInhistoryTable pi  xs
+
+
+
+let rec term_to_expr ctx : term -> Z3.Expr.expr = function
+  | ((Num n))        -> Z3.Arithmetic.Real.mk_numeral_i ctx n
+  | ((Var v))           -> Z3.Arithmetic.Real.mk_const_s ctx v
+  | ((Nil))           -> Z3.Arithmetic.Real.mk_const_s ctx "nil"
+  | ((RES))           -> Z3.Arithmetic.Real.mk_const_s ctx "ret"
+
+  (*
+  | Gen i          -> Z3.Arithmetic.Real.mk_const_s ctx ("t" ^ string_of_int i ^ "'")
+  *)
+  | Plus (t1, t2)  -> Z3.Arithmetic.mk_add ctx [ term_to_expr ctx t1; term_to_expr ctx t2 ]
+  | Minus (t1, t2) -> Z3.Arithmetic.mk_sub ctx [ term_to_expr ctx t1; term_to_expr ctx t2 ]
+  | _ -> Z3.Arithmetic.Real.mk_const_s ctx "nil"
+
+
+
+
+let rec pi_to_expr ctx : pure -> Expr.expr = function
+  | TRUE                -> Z3.Boolean.mk_true ctx
+  | FALSE               -> Z3.Boolean.mk_false ctx
+  | Gt (t1, t2) -> 
+      let t1 = term_to_expr ctx t1 in
+      let t2 = term_to_expr ctx t2 in
+      Z3.Arithmetic.mk_gt ctx t1 t2
+  | GtEq (t1, t2) -> 
+      let t1 = term_to_expr ctx t1 in
+      let t2 = term_to_expr ctx t2 in
+      Z3.Arithmetic.mk_ge ctx t1 t2
+  | Lt (t1, t2) -> 
+      let t1 = term_to_expr ctx t1 in
+      let t2 = term_to_expr ctx t2 in
+      Z3.Arithmetic.mk_lt ctx t1 t2
+  | LtEq (t1, t2) -> 
+      let t1 = term_to_expr ctx t1 in
+      let t2 = term_to_expr ctx t2 in
+      Z3.Arithmetic.mk_le ctx t1 t2
+  | Eq (t1, t2) -> 
+      let newP = PureAnd (GtEq(t1, t2), LtEq(t1, t2)) in 
+      pi_to_expr ctx newP
+(*
+  | Atomic (op, t1, t2) -> (
+      let t1 = term_to_expr ctx t1 in
+      let t2 = term_to_expr ctx t2 in
+      match op with
+      | Eq -> Z3.Boolean.mk_eq ctx t1 t2
+      | Lt -> Z3.Arithmetic.mk_lt ctx t1 t2
+      | Le -> Z3.Arithmetic.mk_le ctx t1 t2
+      | Gt -> Z3.Arithmetic.mk_gt ctx t1 t2
+      | Ge -> Z3.Arithmetic.mk_ge ctx t1 t2)
+      *)
+  | PureAnd (pi1, pi2)      -> Z3.Boolean.mk_and ctx [ pi_to_expr ctx pi1; pi_to_expr ctx pi2 ]
+  | PureOr (pi1, pi2)       -> Z3.Boolean.mk_or ctx [ pi_to_expr ctx pi1; pi_to_expr ctx pi2 ]
+  (*| Imply (pi1, pi2)    -> Z3.Boolean.mk_implies ctx (pi_to_expr ctx pi1) (pi_to_expr ctx pi2)
+  *)
+  | Neg pi              -> Z3.Boolean.mk_not ctx (pi_to_expr ctx pi)
+  | Exists (strs, p) -> 
+    let body = pi_to_expr ctx p in 
+    let int_sort = Arithmetic.Integer.mk_sort ctx in
+    let xs = List.map ~f:(fun a -> Symbol.mk_string ctx a) strs in
+    let quantifier = Z3.Quantifier.mk_exists ctx [int_sort] xs body None [] [] None None  in 
+    let quantifier_expr = Quantifier.expr_of_quantifier quantifier in
+    quantifier_expr
+    ;;
+
+
+let check pi =
+  let cfg = [ ("model", "false"); ("proof", "false") ] in
+  let ctx = mk_context cfg in
+  let expr = pi_to_expr ctx pi in
+  (* print_endline (Expr.to_string expr); *)
+  let goal = Goal.mk_goal ctx true true false in
+  (* print_endline (Goal.to_string goal); *)
+  Goal.add goal [ expr ];
+  let solver = Solver.mk_simple_solver ctx in
+  List.iter ~f:(fun a -> Solver.add solver [ a ]) (Goal.get_formulas goal);
+  let sat = Solver.check solver [] == Solver.SATISFIABLE in
+  (* print_endline (Solver.to_string solver); *)
+  sat
+
+let askZ3 pi = 
+  match existInhistoryTable pi !historyTable with 
+  | Some b  -> b
+  | None ->
+  
+  let _ = counter := !counter + 1 in 
+  let re = check pi in 
+  let ()= historyTable := (string_of_pure pi, re)::!historyTable in 
+  
+  re;;
+
+
+let entailConstrains pi1 pi2 = 
+
+  let sat = not (askZ3 (Neg (PureOr (Neg pi1, pi2)))) in
+  
+  print_string (string_of_pure pi1 ^" -> " ^ string_of_pure pi2 ^" == ");
+  print_string (string_of_bool (sat) ^ "\n");
+  
+  sat;;

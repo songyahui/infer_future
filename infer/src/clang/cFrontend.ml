@@ -493,11 +493,10 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
       let constriants4Mapping = List.fold_left ~f:(fun acc (a, f) -> PureAnd(acc, Eq(a, f))) mappings ~init:TRUE in 
 
-      debug_print ("constriants4Mapping = "  ^ string_of_pure constriants4Mapping);
-
-
       (* Check pre condition *) 
-      if false (* TBD *) then [state]
+      if entailConstrains (PureAnd (p, constriants4Mapping)) preC then 
+      (print_endline ("ERROR!");
+      [([], FALSE, Bot, [], Var "_")])
       else (
         (* Compose pre condition *) 
         let substitutedSummary = List.fold_left 
