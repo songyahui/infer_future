@@ -4,7 +4,7 @@
 (*%token <string> EVENT*)
 %token <string> VAR
 %token <int> INTE
-%token EMPTY LPAR RPAR CONCAT  POWER  DISJ   
+%token EMPTY LPAR RPAR CONCAT  POWER  DISJ  PureConj
 %token COLON  REQUIRE ENSURE FUTURESpec LSPEC RSPEC NULL SEMI
 %token UNDERLINE KLEENE EOF BOTTOM NOTSINGLE RETURN
 %token GT LT EQ GTEQ LTEQ CONJ COMMA MINUS 
@@ -18,8 +18,16 @@
 %start summary
 %type <(Ast_utility.summary)> summary
 %type <(Ast_utility.signature)> signature
-(*
+%type <(Ast_utility.effect)> effect
+%type <(Ast_utility.singleEffect)> singleEffect
 %type <(Ast_utility.pure)> pure
+%type <(Ast_utility.term)> term
+%type <(Ast_utility.regularExpr)> es
+%type <(Ast_utility.event)> event
+%type <(Ast_utility.literal)> literal
+%type <(Ast_utility.futureCond)> futureCond
+(*
+
 %type <(Ast_utility.effect option * Ast_utility.effect option * Ast_utility.effect option)> optionalPrecondition
 %type <(Ast_utility.effect option * Ast_utility.effect option)> optionalPostcondition
 %type <(Ast_utility.effect option)> optionalFuturecondition
@@ -29,26 +37,34 @@
 %type <(Ast_utility.effect)> effect
 %type <(Ast_utility.es)> es_or_ltl
 %type <(Ast_utility.ltl)> ltl
-%type <(Ast_utility.term)> term
+
 
 *)
 
 %type <(Ast_utility.term list)> list_of_formalArgs
-%type <(string list)> separated_list(COMMA, VAR)
+
+%type <(Ast_utility.term list)> list_of_terms
+%type <(string list)> list_of_exs
+
 
 %%
 
 list_of_formalArgs:
-| tLi=separated_list(COMMA, VAR) {List.map ~f:(fun a -> Var a) tLi}
+| {[]}
+| s = VAR {[(Var s)]}
+| li=list_of_formalArgs COMMA s=VAR {li@[(Var s)]} 
+
+
+
 
 
 signature: 
 | str = VAR  LPAR tLi=list_of_formalArgs RPAR  {(str, tLi)}
 
-summary:
-| LSPEC s=signature EQ  RSPEC   {(s, [])}
-
-(*
+list_of_exs:
+| {[]}
+| s = VAR {[(s)]}
+| li=list_of_exs s=VAR {li@[(s)]} 
 
 
 term:
@@ -56,34 +72,32 @@ term:
 | i = INTE{Num ( i) }
 | v = VAR {Var v} 
 | LPAR r = term RPAR { r }
-| a = term b = INTE {Minus (a, Basic( BINT (0 -  b)))}
+| a = term b = INTE {Minus (a, ( Num  (0 -  b)))}
 | LPAR a = term MINUS b = term RPAR {Minus (a, b )}
 | LPAR a = term PLUS b = term RPAR {Plus (a, b)}
 
+list_of_terms:
+| {[]}
+| t = term {[t]}
+| li=list_of_terms COMMA t = term {li@[t]} 
 
 
-parm:
-| LPAR RPAR {[]}
-| LPAR argument= basic_type RPAR {[argument]}
+literal:
+| str=VAR LPAR tLi=list_of_terms  RPAR {(str, tLi)}
 
+event:
+| UNDERLINE {ANY}
+| NOTSINGLE l=literal {Neg l}
+| l=literal {Pos l}
 
-anyEventOrAny:
-| {Any}
-| p=parm { Singleton (("_", p), None) }
-
-neGationAny:
-| UNDERLINE p=parm  { NotSingleton (("_", p))}
-| str = VAR p=parm { NotSingleton ((str, p))}
 
 es:
 | BOTTOM {Bot}
 | EMPTY {Emp}
-| NOTSINGLE rest =neGationAny {rest }
-| str = VAR p=parm { Singleton ((str, p), None) }
+| ev=event { Singleton (ev) }
 | LPAR r = es RPAR { r }
-| a = es DISJ b = es { Disj(a, b) }
-| UNDERLINE rest=anyEventOrAny {rest}
-| a = es CONCAT b = es { Concatenate (a, b) } 
+| a = es DISJ b = es { Disjunction(a, b) }
+| a = es CONCAT b = es { Concate (a, b) } 
 | LPAR a = es  RPAR POWER KLEENE {Kleene a}
 
 
@@ -97,8 +111,38 @@ pure:
 | a = term GTEQ b = term {GtEq (a, b)}
 | a = term LTEQ b = term {LtEq (a, b)}
 | a = term EQ b = term {Eq (a, b)}
-| a = pure CONJ b = pure {PureAnd (a, b)}
+| a = pure PureConj b = pure {PureAnd (a, b)}
 | a = pure DISJ b = pure {PureOr (a, b)}
+
+futureCond: 
+| s = es {[s]}
+| li= futureCond CONJ s = es {li@[s]}
+
+singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=VAR RPAR {(strs, p, es, fc, r)}
+
+effect:
+| s = singleEffect {[s]}
+| li= effect DISJ s = singleEffect {li@[s]}
+
+summary:
+| LSPEC s=signature EQ  eff=effect   
+  RSPEC {(s, eff)}
+
+(*
+parm:
+| LPAR RPAR {[]}
+| LPAR argument= basic_type RPAR {[argument]}
+
+
+anyEventOrAny:
+| {Any}
+| p=parm { Singleton (("_", p), None) }
+
+neGationAny:
+| UNDERLINE p=parm  { NotSingleton (("_", p))}
+| str = VAR p=parm { NotSingleton ((str, p))}
+
+
 
 ltl : 
 | str = VAR p=parm {Lable (str, p)} 

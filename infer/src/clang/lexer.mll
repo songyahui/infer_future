@@ -61,6 +61,7 @@ rule token = parse
 | '<' {LT}
 | '=' {EQ}
 | "/\\" {CONJ}
+| "∧" {PureConj}
 | "\\/" {DISJ}
 | "<>" {FUTURE}  
 | "[]" {GLOBAL}
