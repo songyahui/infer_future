@@ -454,7 +454,8 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   match expr with 
   | CValue(t, fp) -> 
     let r = verifier_getAfreeVar t  in 
-    [(exs@[r], PureAnd(p, Eq(Var r, t)), re , fc, Var r)]
+    let final = [(exs@[r], PureAnd(p, Eq(Var r, t)), re , fc, Var r)] in 
+    final 
   
   | CSeq (e1, e2) -> 
     let effect1 = aux e1 state in
@@ -475,6 +476,8 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let current2 = enforecePure (Neg p) [state] in 
     let effect1 = forward_reasoning signature current1 e1 in 
     let effect2 = forward_reasoning signature current2 e2 in
+    debug_printCIfELse("effect1 = " ^ string_of_effect effect1) ; 
+    debug_printCIfELse("effect2 = " ^ string_of_effect effect2) ; 
     effect1@effect2
 
   | CFunCall (f, xs, fp) -> 
@@ -482,9 +485,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     (match f_summary with 
     | None -> [state]
     | Some summary -> 
-      debug_print ("current state : " ^ string_of_effect [state]); 
-      debug_print ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
-      debug_print ("callee spec : " ^ string_of_summary summary); 
+      debug_printCFunCall ("current state : " ^ string_of_effect [state]); 
+      debug_printCFunCall ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
+      debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
 
       let (_, foramlArgs), preC, postSummary = summary in 
       let r = verifier_getAfreeVar UNIT in 
@@ -494,19 +497,16 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       let constriants4Mapping = List.fold_left ~f:(fun acc (a, f) -> PureAnd(acc, Eq(a, f))) mappings ~init:TRUE in 
 
       (* Check pre condition *) 
-      if entailConstrains (PureAnd (p, constriants4Mapping)) preC then 
+      if (entailConstrains (PureAnd (p, constriants4Mapping)) preC) ==  false  then 
       (print_endline ("ERROR!");
       [([], FALSE, Bot, [], Var "_")])
       else (
         (* Compose pre condition *) 
         let substitutedSummary = List.fold_left 
           ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings r]) ~init:[] postSummary  in 
-
-
-        debug_print ("substitutedSummary : " ^ string_of_effect substitutedSummary); 
-
+        debug_printCFunCall ("substitutedSummary : " ^ string_of_effect substitutedSummary); 
         let composeStates =  add_exs [r] (compose_effects state substitutedSummary) in 
-        debug_print ("composeStates : " ^ string_of_effect composeStates); 
+        debug_printCFunCall ("composeStates : " ^ string_of_effect composeStates); 
         composeStates
       )
     )
@@ -854,10 +854,6 @@ let vardecl2String (dec: Clang_ast_t.decl): string  =
     named_decl_info.ni_name
   | _ -> Clang_ast_proj.get_decl_kind_string dec
 
-let postProcess (signature:signature) (disj_re:effect) : effect = 
-  (*debug_print (string_of_effect disj_re);  *) 
-  let disj_re' = normalise_effect disj_re in 
-  disj_re' 
 
 let sysfile (str:string) : bool  = 
   if String.length str < 1 then false 
@@ -891,9 +887,8 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let raw_final = (forward_reasoning signature defultPrecondition core_prog) in 
           let (final:effect) = ((normalise_effect raw_final)) in
-          let final' = postProcess signature final in 
 
-          let (summary:summary) =  signature, TRUE ,  final' in 
+          let (summary:summary) =  signature, TRUE ,  final in 
 
           summaries := !summaries @ [(summary)])
       

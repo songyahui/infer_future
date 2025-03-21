@@ -9,6 +9,16 @@ let debug_print str =
   if true then print_endline (str)
   else ()
 
+let debug_printCFunCall str = 
+  if false then print_endline (str)
+  else ()
+
+
+let debug_printCIfELse str = 
+  if true then print_endline (str)
+  else ()
+
+
 
 let verifier_counter_reset_to n = verifier_counter := n
 
@@ -402,7 +412,6 @@ let rec normalise_es (eff:regularExpr) : regularExpr =
     | (_, Emp) -> normalise_es es1
     | (Bot, _) -> Bot
     | (_, Bot) -> Bot
-    | (Kleene _, _) -> es1
     (*| (Disjunction (es11, es12), es3) -> Disjunction(normalise_es (Concate (es11,es3)),  normalise_es (Concate (es12, es3))) *)
     | (Concate (es11, es12), es3) -> (Concate (es11, normalise_es (Concate (es12, es3))))
     | _ -> (Concate (es1, es2))
@@ -432,7 +441,11 @@ let rec string_of_core_lang (e:core_lang) :string =
 let rec string_of_fc (fc:futureCond) : string = string_with_seperator string_of_regularExpr fc " /\\ "
 
 
-let rec normalise_fc (fc:futureCond) : futureCond = (List.map ~f:normalise_es fc)
+let rec normalise_fc (fc:futureCond) : futureCond = 
+  (*debug_print ("original_fc: " ^ string_of_fc fc ); *) 
+  let fc' = (List.map ~f:normalise_es fc) in 
+  (*debug_print ("normalised fc: " ^ string_of_fc fc' ); *)
+  fc' 
 
 
 let rec normalise_effect (summary:effect)  : effect = 
