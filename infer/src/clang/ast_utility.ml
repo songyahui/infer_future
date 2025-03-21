@@ -62,6 +62,7 @@ type pure = TRUE
           | PureOr of pure * pure
           | PureAnd of pure * pure
           | Neg of pure
+          | Exists of (string list) * pure 
 
 
 type signature = (string * (term list)) 
@@ -94,7 +95,9 @@ let fc_default =  [(Kleene (Singleton ANY))]
 type singleEffect = (string list * pure * regularExpr * futureCond * string)
 type effect = (singleEffect list)
 
-type summary = signature * effect
+type precondition = pure 
+
+type summary = signature * precondition * effect
 
 let (summaries: (summary list)ref) = ref []
 
@@ -200,10 +203,11 @@ let rec string_of_pure (p:pure):string =
   | LtEq (t1, t2) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2) (*"≤"*)
   | Eq (t1, t2) -> (string_of_term t1) ^ "=" ^ (string_of_term t2)
   | PureOr (p1, p2) -> "("^string_of_pure p1 ^ "∨" ^ string_of_pure p2^")"
-  | PureAnd (p1, p2) -> "("^string_of_pure p1 ^ "∧" ^ string_of_pure p2^")"
-  | Neg (Eq (t1, t2)) -> "("^(string_of_term t1) ^ "!=" ^ (string_of_term t2)^")"
-  | Neg (Gt (t1, t2)) -> "("^(string_of_term t1) ^ "<=" ^ (string_of_term t2)^")"
+  | PureAnd (p1, p2) -> string_of_pure p1 ^ "∧" ^ string_of_pure p2 
+  | Neg (Eq (t1, t2)) -> (string_of_term t1) ^ "!=" ^ (string_of_term t2)
+  | Neg (Gt (t1, t2)) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2)
   | Neg p -> "!(" ^ string_of_pure p^")"
+  | Exists (str, p) -> "∃" ^ string_of_li (fun a -> a) str " "  ^ string_of_pure p
 
 let string_of_loc n = "@" ^ string_of_int n
 
@@ -374,7 +378,7 @@ let rec normalise_pure (pi:pure) : pure =
   | Neg (LtEq (t1, t2)) -> Gt (t1, t2)
   | Neg piN -> Neg (normalise_pure piN)
   | PureOr (pi1,pi2) -> PureAnd (normalise_pure pi1, normalise_pure pi2)
-
+  | Exists (str, p) -> Exists (str, normalise_pure p)
    
 let rec normalise_es (eff:regularExpr) : regularExpr = 
   match eff with 
@@ -445,7 +449,7 @@ let rec string_of_effect (summary:effect) =
   match summary with 
   | [] -> ""
   | [x] -> string_of_a_pair x
-  | x :: xs -> string_of_a_pair x  ^ " \\/ " ^ string_of_effect xs 
+  | x :: xs -> string_of_a_pair x  ^ " \\/ \n" ^ string_of_effect xs 
 
 
 let rec flattenList lili = 
@@ -470,8 +474,8 @@ let rec reverse li =
   | [] -> [] 
   | x :: xs  -> reverse(xs) @ [x]
 
-let string_of_summary (signature, disjRE) = 
-  string_of_signature signature ^ " = " ^ string_of_effect disjRE ^ "\n"
+let string_of_summary ((signature, preC, disjRE):summary) = 
+  string_of_signature signature ^ " = \n" ^ "REQ:" ^ string_of_pure preC ^ "\nENS:" ^string_of_effect disjRE ^ "\n"
 
 let rec string_of_summaries li = 
   match li with 

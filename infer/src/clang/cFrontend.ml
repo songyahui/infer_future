@@ -424,11 +424,11 @@ let rec actual_formal_mappings arctul_args formal_args : ((term * term) list) =
     print_endline (string_of_list_terms formal_args); 
     []
 
-let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : (term list * effect) option = 
+let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : (term list * pure * effect) option = 
   match summaries with 
   | [] -> None 
-  | ((fname, args), re) :: xs  -> 
-    if String.compare fname f ==0 then Some (args, re)
+  | ((fname, args), preC, re) :: xs  -> 
+    if String.compare fname f ==0 then Some (args, preC, re)
     else findSpecifictaionSummaries f xs 
 
 
@@ -525,7 +525,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let f_summary = findSpecifictaionSummaries f !summaries in
     (match f_summary with 
     | None -> [state]
-    | Some (foraml,f_eff) -> 
+    | Some (foraml,preC, f_eff) -> 
     compose_effects [state] (substitute_effect f_eff (actual_formal_mappings xs foraml)) 
     )
 
@@ -911,7 +911,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           let (final:effect) = ((normalise_effect raw_final)) in
           let final' = postProcess signature final in 
 
-          let (summary:summary) =  signature, final' in 
+          let (summary:summary) =  signature, TRUE ,  final' in 
 
           summaries := !summaries @ [(summary)])
       
@@ -1032,10 +1032,10 @@ let retriveComments (source:string) : (string list) =
   
 
 let retriveSpecifications (source:string) : (Ast_utility.summary list * int * int) = 
-  debug_print ("opining " ^ source);
+  
   try
     let ic = open_in source in
-    debug_print ("opened " ^ source);
+    
 
     let lines =  (input_lines ic ) in
     let rec helper (li:string list) = 
@@ -1048,18 +1048,23 @@ let retriveSpecifications (source:string) : (Ast_utility.summary list * int * in
     let partitions = retriveComments line in (*in *)
     let line_of_spec = List.fold_left partitions ~init:0 ~f:(fun acc a -> acc + (List.length (Str.split (Str.regexp "\n") a)))  in 
       
+    (*
     (if List.length partitions == 0 then ()
     else debug_print ("Global specifictaions are: ")); 
+    *)
 
     let user_sepcifications = List.map partitions 
         ~f:(fun singlespec -> 
-        debug_print ("singlespec: " ^ singlespec ^ "\n");  
+        (*debug_print ("singlespec: " ^ singlespec ^ "\n");   *)
           let summaries = Parser.summary Lexer.token (Lexing.from_string singlespec) in 
-          debug_print (string_of_summary summaries);
+          (*debug_print (string_of_summary summaries); *)
 
-          ()
+          summaries
           
     ) in
+
+    summaries := !summaries @ user_sepcifications ; 
+
       
       (*
       let _ = List.map sepcifications ~f:(fun (_ , pre, post, future) -> print_endline (string_of_function_sepc (pre, post, future) ) ) in 
@@ -1074,7 +1079,7 @@ let retriveSpecifications (source:string) : (Ast_utility.summary list * int * in
       *)
 
     with e ->                      (* 一些不可预见的异常发生 *)
-      debug_print ("something wrong  " ^ source);
+      debug_print ("Something wrong in parsing  " ^ source);
       ([], 0, 0)
 
    ;;
@@ -1117,7 +1122,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   
   in 
 
-  print_endline ("\n=====\nNum of summaries: " ^ string_of_int ( List.length !summaries) ); 
+  print_endline ("\n=====\nNum of summaries: " ^ string_of_int ( List.length !summaries)  ^"\n"); 
 
   List.iter ~f:(fun a -> print_endline (string_of_summary a)) !summaries; 
 

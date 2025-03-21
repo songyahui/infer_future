@@ -33,8 +33,8 @@ rule token = parse
 | "𝝐" { EMPTY }
 | "/*@" {LSPEC}
 | "@*/" {RSPEC}
-| "Pre" {REQUIRE}
-| "Post" {ENSURE}
+| "REQ" {REQUIRE} 
+| "ENS" {ENSURE}
 | "Future" {FUTURESpec}
 | "TRUE" { TRUE }
 | "FALSE" { FALSE }
@@ -63,6 +63,7 @@ rule token = parse
 | '=' {EQ}
 | "/\\" {CONJ}
 | "∧" {PureConj}
+| "∃" {Exists}
 | "\\/" {DISJ}
 | "<>" {FUTURE}  
 | "[]" {GLOBAL}

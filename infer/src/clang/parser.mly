@@ -4,7 +4,7 @@
 (*%token <string> EVENT*)
 %token <string> VAR
 %token <int> INTE
-%token EMPTY LPAR RPAR CONCAT  POWER  DISJ  PureConj UNIT
+%token EMPTY LPAR RPAR CONCAT  POWER  DISJ  PureConj UNIT Exists
 %token COLON  REQUIRE ENSURE FUTURESpec LSPEC RSPEC NULL SEMI
 %token UNDERLINE KLEENE EOF BOTTOM NOTSINGLE RETURN
 %token GT LT EQ GTEQ LTEQ CONJ COMMA MINUS 
@@ -119,6 +119,7 @@ pure:
 | a = term EQ b = term {Eq (a, b)}
 | a = pure PureConj b = pure {PureAnd (a, b)}
 | a = pure DISJ b = pure {PureOr (a, b)}
+| Exists strs= list_of_exs CONCAT a = pure {Exists ( strs, a)}
 
 futureCond: 
 | s = es {[s]}
@@ -131,8 +132,11 @@ effect:
 | li= effect DISJ s = singleEffect {li@[s]}
 
 summary:
-| LSPEC s=signature EQ  eff=effect   
-  RSPEC {(s, eff)}
+| LSPEC s=signature EQ REQUIRE p=pure  ENSURE  eff=effect   
+  RSPEC {(s, p,  eff)}
+
+
+
 
 (*
 parm:
