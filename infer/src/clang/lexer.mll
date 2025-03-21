@@ -39,6 +39,7 @@ rule token = parse
 | "TRUE" { TRUE }
 | "FALSE" { FALSE }
 | "nil" {NULL}
+| "unit" {UNIT}
 | "ret" {RETURN}
 | int      { INTE (int_of_string (Lexing.lexeme lexbuf)) }
 | id as str { VAR str }

@@ -4,7 +4,7 @@
 (*%token <string> EVENT*)
 %token <string> VAR
 %token <int> INTE
-%token EMPTY LPAR RPAR CONCAT  POWER  DISJ  PureConj
+%token EMPTY LPAR RPAR CONCAT  POWER  DISJ  PureConj UNIT
 %token COLON  REQUIRE ENSURE FUTURESpec LSPEC RSPEC NULL SEMI
 %token UNDERLINE KLEENE EOF BOTTOM NOTSINGLE RETURN
 %token GT LT EQ GTEQ LTEQ CONJ COMMA MINUS 
@@ -45,6 +45,7 @@
 
 %type <(Ast_utility.term list)> list_of_terms
 %type <(string list)> list_of_exs
+%type <(Ast_utility.literal)>  not_event
 
 
 %%
@@ -68,6 +69,7 @@ list_of_exs:
 
 
 term:
+| UNIT {UNIT}
 | UNDERLINE {ANY}
 | i = INTE{Num ( i) }
 | v = VAR {Var v} 
@@ -85,9 +87,13 @@ list_of_terms:
 literal:
 | str=VAR LPAR tLi=list_of_terms  RPAR {(str, tLi)}
 
+not_event:
+| l=literal { l}
+| UNDERLINE LPAR tLi=list_of_terms  RPAR {("_", tLi)}
+
 event:
 | UNDERLINE {ANY}
-| NOTSINGLE l=literal {Neg l}
+| NOTSINGLE l= not_event{Neg l }
 | l=literal {Pos l}
 
 
