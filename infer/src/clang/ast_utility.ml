@@ -10,12 +10,12 @@ let debug_print str =
   else ()
 
 let debug_printCFunCall str = 
-  if false then print_endline (str)
+  if true then print_endline (str)
   else ()
 
 
 let debug_printCIfELse str = 
-  if true then print_endline (str)
+  if false then print_endline (str)
   else ()
 
 
@@ -219,7 +219,7 @@ let rec string_of_pure (p:pure):string =
   | Neg (Eq (t1, t2)) -> (string_of_term t1) ^ "!=" ^ (string_of_term t2)
   | Neg (Gt (t1, t2)) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2)
   | Neg p -> "!(" ^ string_of_pure p^")"
-  | Exists (str, p) -> "∃" ^ string_of_li (fun a -> a) str " "  ^ string_of_pure p ^ ". "
+  | Exists (str, p) -> "∃" ^ string_of_li (fun a -> a) str " "  ^ ". " ^ string_of_pure p 
 
 let string_of_loc n = "@" ^ string_of_int n
 
@@ -805,7 +805,35 @@ let entailConstrains pi1 pi2 =
 
   let sat = not (askZ3 (Neg (PureOr (Neg pi1, pi2)))) in
   
-  print_string (string_of_pure pi1 ^" -> " ^ string_of_pure pi2 ^" == ");
   print_string (string_of_bool (sat) ^ "\n");
   
   sat;;
+
+let rec getUnification pi t l : pure option = 
+  match pi with 
+  | Eq (t1, t2 ) -> 
+    if stricTcompareTerm t1 t then Some (Eq(t2, Var l)) 
+    else if stricTcompareTerm t2 t then Some (Eq(t1, Var l)) 
+    else None 
+  | PureAnd (p1, p2) -> 
+    (match getUnification p1 t l with 
+    | None -> getUnification p2 t l 
+    | Some resdue -> Some resdue
+    )
+  | _ -> None 
+
+let checkPreCondition pi1 pi2 = 
+
+  match pi2 with 
+  | Exists (l::_, Eq(Var t1, Var t2)) -> 
+    print_string (string_of_pure pi1 ^" -> " ^ string_of_pure pi2 ^" == ");
+    let target = if String.compare l t1 == 0 then Var t2 
+                 else Var t1 in 
+    getUnification pi1 target l 
+  | TRUE -> Some TRUE 
+    
+  | _ -> 
+    print_string (string_of_pure pi1 ^" -> " ^ string_of_pure pi2 ^" == ");
+
+    if entailConstrains pi1 pi2 then Some TRUE 
+    else None 

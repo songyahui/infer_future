@@ -9,7 +9,8 @@ void *foo(struct st *p){
   return q;}
 
 int main() {
-  struct st p; void *q;
+  struct st p; 
+  void *q;
   p.f = malloc(1);
   q = foo(&p); 
   free(q); 

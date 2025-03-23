@@ -403,9 +403,13 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
   | None -> -1
   | Some n -> n )
 
+let enforecePureSingleEffect (p:pure) (re:singleEffect) : singleEffect = 
+  let (exs, a, b, c, r) = re in 
+  (exs, PureAnd(a, p), b, c, r)
+  
 
 let enforecePure (p:pure) (re:effect) : effect = 
-  List.map re ~f:(fun (exs, a, b, c, r) -> (exs, PureAnd(a, p), b, c, r)) 
+  List.map re ~f:(fun single -> enforecePureSingleEffect  p single ) 
 
 let rec actual_formal_mappings (arctul_args:term list) (formal_args:term list) : ((term * term) list) = 
   match arctul_args, formal_args with 
@@ -444,6 +448,21 @@ let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)
 
   substitute_single_effect (newexs, p, es, fc, ret) (mappings@ exs_mappsing @[(Var newr, ret)])
 
+let renamePreCond(summary:summary) :summary = 
+  let (signature, preCond, effects) = summary in 
+  match preCond with 
+  | Exists (strLi, pIn) -> 
+    let (newexs:string list) = List.map ~f:(fun a -> verifier_getAfreeVar (Var a)) strLi in 
+    let string2Term li = (List.map ~f:(fun a -> Var a) li) in   
+    let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2Term newexs) (string2Term strLi) in 
+    let preCond' =  Exists (newexs, substitute_pure pIn exs_mappsing) in 
+    let effects' = substitute_effect effects exs_mappsing in 
+    (signature, preCond', effects')
+
+
+    
+  | _ -> summary
+
   
 
 let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang) : effect = 
@@ -466,7 +485,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let effect1 = aux e state in 
     let r = verifier_getAfreeVar v in 
     let effect1' = substitute_effect effect1 [(Var r, v)] in 
-    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@[r], PureAnd(p, Eq(v, ret)), re, fc, Var "_")) effect1'
+    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@[r], PureAnd(p, Eq(v, ret)), re, fc, UNIT)) effect1'
     
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret)]
@@ -476,8 +495,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let current2 = enforecePure (Neg p) [state] in 
     let effect1 = forward_reasoning signature current1 e1 in 
     let effect2 = forward_reasoning signature current2 e2 in
-    debug_printCIfELse("effect1 = " ^ string_of_effect effect1) ; 
+    (*debug_printCIfELse("effect1 = " ^ string_of_effect effect1) ; 
     debug_printCIfELse("effect2 = " ^ string_of_effect effect2) ; 
+    *)
     effect1@effect2
 
   | CFunCall (f, xs, fp) -> 
@@ -485,6 +505,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     (match f_summary with 
     | None -> [state]
     | Some summary -> 
+      let summary = renamePreCond summary in 
       debug_printCFunCall ("current state : " ^ string_of_effect [state]); 
       debug_printCFunCall ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
       debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
@@ -497,10 +518,13 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       let constriants4Mapping = List.fold_left ~f:(fun acc (a, f) -> PureAnd(acc, Eq(a, f))) mappings ~init:TRUE in 
 
       (* Check pre condition *) 
-      if (entailConstrains (PureAnd (p, constriants4Mapping)) preC) ==  false  then 
-      (print_endline ("ERROR!");
-      [([], FALSE, Bot, [], Var "_")])
-      else (
+      (match (checkPreCondition (PureAnd (p, constriants4Mapping)) preC) with 
+      | None -> (debug_printCFunCall ("checkPreCondition ERROR!");
+                [([], FALSE, Bot, [], Var "_")])
+      | Some resdue -> 
+        debug_printCFunCall ("residue: " ^ string_of_pure resdue);
+        let state = enforecePureSingleEffect resdue state in 
+        
         (* Compose pre condition *) 
         let substitutedSummary = List.fold_left 
           ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings r]) ~init:[] postSummary  in 
@@ -842,6 +866,12 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | NullStmt (stmt_info, _) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     CValue (Nil, fp)
+
+  | CXXConstructExpr (stmt_info, stmt_list, expr_info, cxx_construct_expr_info) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    (*print_endline (string_of_int (List.length stmt_list));  *)
+    CValue (UNIT, fp)
+    (*  struct st p  *)
 
   | _ -> 
     CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
