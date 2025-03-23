@@ -431,13 +431,17 @@ let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : summary
 let add_exs exs1 effect : effect = 
   List.map ~f:(fun (exs, p, re, fc, r) -> (exs@exs1, p, re, fc, r)) effect 
 
+let trace_subtraction (fc: futureCond) (es:regularExpr) : futureCond =
+  fc
+
 let rec compose_effects (eff:singleEffect) eff2 = 
     match eff2 with
     | [] -> []
     | x :: xs -> 
       let (exs, p, re, fc, _) = eff in 
       let (exs', p', re', fc', ret') = x in 
-      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc@fc', ret') :: compose_effects eff xs
+      let fc_subtracted = trace_subtraction fc re' in 
+      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret') :: compose_effects eff xs
 
 
 let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)) (newr:string): singleEffect = 
