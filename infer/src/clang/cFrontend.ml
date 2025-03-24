@@ -411,15 +411,7 @@ let enforecePureSingleEffect (p:pure) (re:singleEffect) : singleEffect =
 let enforecePure (p:pure) (re:effect) : effect = 
   List.map re ~f:(fun single -> enforecePureSingleEffect  p single ) 
 
-let rec actual_formal_mappings (arctul_args:term list) (formal_args:term list) : ((term * term) list) = 
-  match arctul_args, formal_args with 
-  | [], [] -> [] 
-  | x ::xs , y::ys -> (x, y) :: (actual_formal_mappings xs ys)
-  | _, _ -> 
-    print_endline ("there is a mismatch of actual and formal arguments!!!");
-    print_endline (string_of_list_terms arctul_args); 
-    print_endline (string_of_list_terms formal_args); 
-    []
+
 
 let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : summary option = 
   match summaries with 
@@ -431,8 +423,31 @@ let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : summary
 let add_exs exs1 effect : effect = 
   List.map ~f:(fun (exs, p, re, fc, r) -> (exs@exs1, p, re, fc, r)) effect 
 
-let trace_subtraction (fc: futureCond) (es:regularExpr) : futureCond =
-  fc
+let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr =
+  match es with 
+  | Emp -> fc 
+  | Bot -> Bot 
+  | _ -> 
+    let fst = re_fst es in 
+    let res = List.fold_left ~f:(fun acc ev -> 
+      let derive1 = derivative p ev fc in 
+      let derive2 = derivative p ev es in  
+      let temp = trace_subtraction_single p derive1 derive2 in
+      Disjunction (acc, temp)) ~init:Bot fst  in 
+    let res = normalise_es res  in 
+    debug_printTraceSubtraction ("res single = " ^ string_of_regularExpr res ^ "\n");
+    res
+    
+    
+
+let trace_subtraction (lhsp:pure) (rhsp:pure) (fc: futureCond) (es:regularExpr) : futureCond =
+  debug_printTraceSubtraction ( "======="); 
+  debug_printTraceSubtraction (string_of_pure lhsp ^ " - " ^ string_of_pure rhsp);
+  debug_printTraceSubtraction (string_of_fc fc ^ " - " ^ string_of_regularExpr es);
+  
+  let res = normalise_fc (List.map ~f:(fun a -> trace_subtraction_single (PureAnd(lhsp, rhsp)) a es) fc) in 
+  debug_printTraceSubtraction ("res = " ^ string_of_fc res ^ "\n");
+  res
 
 let rec compose_effects (eff:singleEffect) eff2 = 
     match eff2 with
@@ -440,7 +455,7 @@ let rec compose_effects (eff:singleEffect) eff2 =
     | x :: xs -> 
       let (exs, p, re, fc, _) = eff in 
       let (exs', p', re', fc', ret') = x in 
-      let fc_subtracted = trace_subtraction fc re' in 
+      let fc_subtracted = trace_subtraction p p' fc re' in 
       (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret') :: compose_effects eff xs
 
 
