@@ -480,7 +480,7 @@ let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)
 
   substitute_single_effect (newexs, p, es, fc, ret) (mappings@ exs_mappsing @[(Var newr, ret)])
 
-let renamePreCond(summary:summary) :summary = 
+let renamePreCond(summary:summary) :summary *  string list = 
   let (signature, preCond, effects) = summary in 
   match preCond with 
   | Exists (strLi, pIn) -> 
@@ -489,11 +489,11 @@ let renamePreCond(summary:summary) :summary =
     let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2Term newexs) (string2Term strLi) in 
     let preCond' =  Exists (newexs, substitute_pure pIn exs_mappsing) in 
     let effects' = substitute_effect effects exs_mappsing in 
-    (signature, preCond', effects')
+    (signature, preCond', effects'), newexs
 
 
     
-  | _ -> summary
+  | _ -> summary, []
 
   
 
@@ -537,7 +537,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     (match f_summary with 
     | None -> [state]
     | Some summary -> 
-      let summary = renamePreCond summary in 
+      let summary, ex_preCond = renamePreCond summary in 
       debug_printCFunCall ("current state : " ^ string_of_effect [state]); 
       debug_printCFunCall ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
       debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
@@ -561,7 +561,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
         let substitutedSummary = List.fold_left 
           ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings r]) ~init:[] postSummary  in 
         debug_printCFunCall ("substitutedSummary : " ^ string_of_effect substitutedSummary); 
-        let composeStates =  add_exs [r] (compose_effects state substitutedSummary fp) in 
+        let composeStates =  add_exs (r::ex_preCond) (compose_effects state substitutedSummary fp) in 
         debug_printCFunCall ("composeStates : " ^ string_of_effect composeStates); 
         composeStates
       )

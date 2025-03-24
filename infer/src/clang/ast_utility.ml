@@ -29,7 +29,7 @@ let errormessagecounter = ref 0
 
 let error_message str = 
   errormessagecounter := !errormessagecounter + 1 ; 
-  errormessage := !errormessage ^ string_of_int !errormessagecounter ^ "\n"^  str ^ "\n";
+  errormessage := !errormessage ^ "\n" ^ string_of_int !errormessagecounter ^  str ^ "\n";
   if true then print_endline (str)
   else ()
   
@@ -187,7 +187,7 @@ let rec string_of_term t : string =
   | Num i -> if i >=0 then string_of_int i else  "(" ^string_of_int i^ ")"
   | ANY -> "*"
   | UNIT -> "()"
-  | Nil -> "[]"
+  | Nil -> "nil"
   | TCons (a, b) -> Format.asprintf "%s::%s" (string_of_term a) (string_of_term b)
   | TTrue -> "true"
   | TFalse -> "false"
