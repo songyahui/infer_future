@@ -10,19 +10,28 @@ let debug_print str =
   else ()
 
 let debug_printCFunCall str = 
-  if false then print_endline (str)
+  if false then debug_print (str)
   else ()
 
 let debug_printTraceSubtraction str = 
-  if true then print_endline (str)
+  if false then debug_print (str)
   else ()
 
 
 let debug_printCIfELse str = 
-  if false then print_endline (str)
+  if false then debug_print (str)
   else ()
 
 
+let errormessage = ref ""
+
+
+let error_message str = 
+  errormessage := !errormessage ^ str;
+  if true then print_endline (str)
+  else ()
+  
+  
 
 let verifier_counter_reset_to n = verifier_counter := n
 
@@ -37,6 +46,8 @@ let rec string_with_seperator f li sep =
 let nonDetermineFunCall = ["__nondet_int";"__VERIFIER_nondet_int"]
 
 let current_source_file = ref ""
+
+
 
 type state = int
 

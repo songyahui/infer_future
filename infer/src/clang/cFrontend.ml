@@ -435,28 +435,44 @@ let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : r
       let temp = trace_subtraction_single p derive1 derive2 in
       Disjunction (acc, temp)) ~init:Bot fst  in 
     let res = normalise_es res  in 
-    debug_printTraceSubtraction ("res single = " ^ string_of_regularExpr res ^ "\n");
     res
     
     
 
-let trace_subtraction (lhsp:pure) (rhsp:pure) (fc: futureCond) (es:regularExpr) : futureCond =
+let trace_subtraction (lhsp:pure) (rhsp:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
   debug_printTraceSubtraction ( "======="); 
   debug_printTraceSubtraction (string_of_pure lhsp ^ " - " ^ string_of_pure rhsp);
   debug_printTraceSubtraction (string_of_fc fc ^ " - " ^ string_of_regularExpr es);
   
-  let res = normalise_fc (List.map ~f:(fun a -> trace_subtraction_single (PureAnd(lhsp, rhsp)) a es) fc) in 
+  let res = normalise_fc (List.map ~f:(fun a -> 
+
+    let p =  (PureAnd(lhsp, rhsp)) in 
+    let single_res = trace_subtraction_single p a es in 
+    (match single_res with | Bot -> 
+    error_message ("The future condition is violated here at " ^ string_of_int fp);
+    error_message ("Future condition is = " ^ string_of_regularExpr a); 
+    error_message ("Trace subtracted = " ^ string_of_regularExpr es);  
+    error_message ("Pure =  " ^ string_of_pure p);  
+    | _ -> ()
+    ); 
+    
+    
+
+    single_res
+
+    
+    ) fc) in 
   debug_printTraceSubtraction ("res = " ^ string_of_fc res ^ "\n");
   res
 
-let rec compose_effects (eff:singleEffect) eff2 = 
+let rec compose_effects (eff:singleEffect) eff2 (fp:int)= 
     match eff2 with
     | [] -> []
     | x :: xs -> 
       let (exs, p, re, fc, _) = eff in 
       let (exs', p', re', fc', ret') = x in 
-      let fc_subtracted = trace_subtraction p p' (removeAny fc) re' in 
-      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret') :: compose_effects eff xs
+      let fc_subtracted = trace_subtraction p p' (removeAny fc) re' fp in 
+      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret') :: compose_effects eff xs fp 
 
 
 let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)) (newr:string): singleEffect = 
@@ -548,7 +564,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
         let substitutedSummary = List.fold_left 
           ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings r]) ~init:[] postSummary  in 
         debug_printCFunCall ("substitutedSummary : " ^ string_of_effect substitutedSummary); 
-        let composeStates =  add_exs [r] (compose_effects state substitutedSummary) in 
+        let composeStates =  add_exs [r] (compose_effects state substitutedSummary fp) in 
         debug_printCFunCall ("composeStates : " ^ string_of_effect composeStates); 
         composeStates
       )
@@ -1151,7 +1167,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
   List.iter ~f:(fun a -> print_endline (string_of_summary a)) !summaries; 
 
-  let () = finalReport := !finalReport ^ msg in 
+  let () = finalReport := !finalReport ^ msg ^ !errormessage in 
   let dirName = "/infer-term" in 
   let path = Sys.getcwd()  (* "/Users/yahuis/Desktop/git/infer_termination/" *) in 
   print_endline (Sys.getcwd());
@@ -1160,6 +1176,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
   let output_report =  path ^ dirName ^ "/report.csv" in 
   let output_detail =  path ^ dirName ^ "/detail.txt" in 
+  
 
   outputFinalReport (msg) output_report ; 
   (

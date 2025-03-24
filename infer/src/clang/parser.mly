@@ -37,12 +37,9 @@
 %type <(Ast_utility.effect)> effect
 %type <(Ast_utility.es)> es_or_ltl
 %type <(Ast_utility.ltl)> ltl
-
-
 *)
 
 %type <(Ast_utility.term list)> list_of_formalArgs
-
 %type <(Ast_utility.term list)> list_of_terms
 %type <(string list)> list_of_exs
 %type <(Ast_utility.event)>  not_event
