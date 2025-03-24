@@ -455,7 +455,7 @@ let rec compose_effects (eff:singleEffect) eff2 =
     | x :: xs -> 
       let (exs, p, re, fc, _) = eff in 
       let (exs', p', re', fc', ret') = x in 
-      let fc_subtracted = trace_subtraction p p' fc re' in 
+      let fc_subtracted = trace_subtraction p p' (removeAny fc) re' in 
       (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret') :: compose_effects eff xs
 
 

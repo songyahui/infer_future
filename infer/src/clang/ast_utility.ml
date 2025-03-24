@@ -519,14 +519,20 @@ let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr =
   | Pos (strTarget, argsTarget) -> 
     (match ev with
     | Pos (str, args) -> 
-      
       if String.compare str strTarget == 0 && List.length args == List.length argsTarget then 
         if compareTermListWithPure p args argsTarget  then Emp 
         else Bot
       else Bot
     | _ -> Bot
     )
-  | _ -> Bot
+  | Neg (strTarget, argsTarget) -> 
+    (match ev with
+    | Pos (str, args) -> 
+      if String.compare str strTarget != 0 || List.length args != List.length argsTarget then Emp 
+      else if compareTermListWithPure p args argsTarget == false then Emp 
+      else Bot  
+    | _ -> Bot
+    )
   
 
 
@@ -639,19 +645,21 @@ let rec string_of_core_lang (e:core_lang) :string =
 
 let rec string_of_fc (fc:futureCond) : string = string_with_seperator (fun a -> "("^string_of_regularExpr a ^")") fc " /\\ "
 
+let rec removeAny fcIn = 
+  match fcIn with 
+  | [] -> [] 
+  | [x] -> [x] 
+  | Kleene (Emp) :: xs -> removeAny xs 
+  | x :: xs -> x :: removeAny xs
+
 
 let normalise_fc (fc:futureCond) : futureCond = 
-  let rec removeAny fcIn = 
-    match fcIn with 
-    | [] -> [] 
-    | [x] -> [x] 
-    | Kleene (Emp) :: xs -> removeAny xs 
-    | x :: xs -> x :: removeAny xs
-  in 
   (*debug_print ("original_fc: " ^ string_of_fc fc ); *) 
   let fc' = (List.map ~f:normalise_es fc) in 
   (*debug_print ("normalised fc: " ^ string_of_fc fc' ); *)
   removeAny fc' 
+
+
 
 
 let rec normalise_effect (summary:effect)  : effect = 
