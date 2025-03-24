@@ -449,10 +449,7 @@ let trace_subtraction (lhsp:pure) (rhsp:pure) (fc: futureCond) (es:regularExpr) 
     let p =  (PureAnd(lhsp, rhsp)) in 
     let single_res = trace_subtraction_single p a es in 
     (match single_res with | Bot -> 
-    error_message ("The future condition is violated here at " ^ string_of_int fp);
-    error_message ("Future condition is = " ^ string_of_regularExpr a); 
-    error_message ("Trace subtracted = " ^ string_of_regularExpr es);  
-    error_message ("Pure =  " ^ string_of_pure p);  
+      error_message ("\nThe future condition is violated here at " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr a ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
     | _ -> ()
     ); 
     

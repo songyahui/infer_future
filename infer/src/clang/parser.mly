@@ -66,6 +66,7 @@ list_of_exs:
 
 
 term:
+| NULL {Nil}
 | UNIT {UNIT}
 | UNDERLINE {ANY}
 | i = INTE{Num ( i) }

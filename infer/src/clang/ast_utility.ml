@@ -24,10 +24,12 @@ let debug_printCIfELse str =
 
 
 let errormessage = ref ""
+let errormessagecounter = ref 0
 
 
 let error_message str = 
-  errormessage := !errormessage ^ str;
+  errormessagecounter := !errormessagecounter + 1 ; 
+  errormessage := !errormessage ^ string_of_int !errormessagecounter ^ "\n"^  str ^ "\n";
   if true then print_endline (str)
   else ()
   

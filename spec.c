@@ -5,5 +5,7 @@
 
 /*@ malloc(size) = 
     REQ size > 0 
-    ENS (loc : r=loc ; malloc(loc)  ; (!free(loc))^* · free(loc) ·  (_)^* ; r)@*/
+    ENS (loc : r=loc ; malloc(loc)  ; (!free(loc))^* · free(loc) ·  (_)^* ; r)  \/ 
+        ( : r=nil ; 𝝐 ; (!_(r))^* ; r)
+@*/
 
