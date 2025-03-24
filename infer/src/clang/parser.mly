@@ -45,7 +45,7 @@
 
 %type <(Ast_utility.term list)> list_of_terms
 %type <(string list)> list_of_exs
-%type <(Ast_utility.literal)>  not_event
+%type <(Ast_utility.event)>  not_event
 
 
 %%
@@ -88,12 +88,12 @@ literal:
 | str=VAR LPAR tLi=list_of_terms  RPAR {(str, tLi)}
 
 not_event:
-| l=literal { l}
-| UNDERLINE LPAR tLi=list_of_terms  RPAR {("_", tLi)}
+| l=literal {Neg l}
+| UNDERLINE LPAR tLi=list_of_terms  RPAR {NegTerm (tLi)}
 
 event:
 | UNDERLINE {ANY}
-| NOTSINGLE l= not_event{Neg l }
+| NOTSINGLE l= not_event{l }
 | l=literal {Pos l}
 
 

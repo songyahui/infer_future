@@ -88,7 +88,7 @@ type core_value = term
 
 type literal = string * (core_value list)
 
-type event = | Pos of literal | Neg of literal | ANY
+type event = | Pos of literal | Neg of literal | NegTerm of term list | ANY
 
 type firstEle = event
 
@@ -235,6 +235,7 @@ let string_of_event (ev:event) : string =
   | Pos (str, args) -> str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
   | Neg (str, args) -> "!" ^ str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
   | ANY -> "_"
+  | NegTerm args -> "!_" ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
 
 let rec string_of_regularExpr re = 
   match re with 
@@ -533,6 +534,13 @@ let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr =
       else Bot  
     | _ -> Bot
     )
+  | NegTerm argsTarget -> 
+    (match ev with
+    | Pos (str, args) -> 
+      if compareTermListWithPure p args argsTarget then Bot  
+      else Emp
+    | _ -> Bot
+    )
   
 
 
@@ -646,12 +654,12 @@ let rec string_of_core_lang (e:core_lang) :string =
 let rec string_of_fc (fc:futureCond) : string = string_with_seperator (fun a -> "("^string_of_regularExpr a ^")") fc " /\\ "
 
 let rec removeAny fcIn = 
-  match fcIn with 
-  | [] -> [] 
-  | [x] -> [x] 
-  | Kleene (Emp) :: xs -> removeAny xs 
-  | x :: xs -> x :: removeAny xs
-
+  if List.length fcIn <= 1 then fcIn 
+  else
+    let temp = 
+    List.filter ~f:(fun a -> match a with | Kleene (Singleton ANY) -> false | _ -> true) fcIn in 
+    if List.length temp == 0 then [Kleene (Singleton ANY)]
+    else temp
 
 let normalise_fc (fc:futureCond) : futureCond = 
   (*debug_print ("original_fc: " ^ string_of_fc fc ); *) 
@@ -808,6 +816,7 @@ let substitute_event (ev:event) (actual_formal_mappings:((term*term)list)): even
   | Pos (str, args) -> Pos (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
   | Neg (str, args) -> Neg (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
   | ANY -> ANY
+  | NegTerm (args) -> NegTerm (List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
 
 let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): regularExpr = 
   match re with
