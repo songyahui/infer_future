@@ -501,6 +501,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
   let rec aux expr (state:singleEffect) : effect = 
   let (exs, p, re, fc, ret) = state in
+  
 
   match expr with 
   | CValue(t, fp) -> 
@@ -575,7 +576,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     )
   | _ -> [state]
   in 
-  List.fold_left ~f:(fun acc a -> acc @ aux prog a) ~init:[] states 
+  List.fold_left ~f:(fun acc a -> acc @ aux prog a) ~init:[] (normalise_effect states) 
 
 
 

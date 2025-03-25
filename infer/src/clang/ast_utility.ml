@@ -22,6 +22,11 @@ let debug_printCIfELse str =
   if false then debug_print (str)
   else ()
 
+let debug_postprocess str = 
+    if false  then debug_print (str)
+    else ()
+  
+
 
 let errormessage = ref ""
 let errormessagecounter = ref 0
@@ -684,17 +689,24 @@ let normalise_fc (fc:futureCond) : futureCond =
 
 
 let rec normalise_effect (summary:effect)  : effect = 
-  let normalise_effect_a_pair (exs, p, re, fc, r) = (exs, normalise_pure p, normalise_es re, normalise_fc fc, r) in 
+  let normalise_effect_a_pair (exs, p, re, fc, r) = 
+    let p' = normalise_pure p in
+    if entailConstrains p' FALSE then []
+    else [(exs, normalise_pure p, normalise_es re, normalise_fc fc, r)] in 
   match summary with 
   | [] -> []
-  | x :: xs -> (normalise_effect_a_pair x)  ::  (normalise_effect xs)
+  | x :: xs -> (normalise_effect_a_pair x)  @  (normalise_effect xs)
 
 let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
-  
+
+let string_of_single_effect (exs, p, re, fc, r) = 
+  "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r 
 
 let rec string_of_effect (summary:effect) = 
 
-  let string_of_a_pair (exs, p, re, fc, r) = "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r in 
+  let string_of_a_pair (exs, p, re, fc, r) = string_of_single_effect (exs, p, re, fc, r) in 
+    
+    
 
   match summary with 
   | [] -> ""
@@ -916,18 +928,30 @@ let rec findReplacebleVar exs p formalArgs : (string * string list) option =
 
 ;;
 
-let removeIntermediateRes exs eqVars = 
-  List.filter ~f:(fun ex -> existAux (fun a b -> if String.compare a b == 0 then false else true) eqVars ex ) exs
+let rec removeIntermediateRes exs tobereplacedList = 
+  match exs with
+  | [] -> [] 
+  | x :: xs -> 
+    if existAux (fun a b -> if String.compare a b == 0 then true else false) tobereplacedList x then removeIntermediateRes xs tobereplacedList
+    else x:: removeIntermediateRes xs tobereplacedList
+
+
+
 
 
 let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r) : singleEffect = 
   match findReplacebleVar exs p formalArgs with 
   | None -> (exs, p, re, fc, r)
   | Some (ex, tobereplacedList) -> 
+    debug_postprocess ("\n========\nex: " ^ ex);
+    debug_postprocess ("tobereplacedList: " ^ string_of_li (fun a-> a) tobereplacedList " ");
     let mappings = List.map ~f:(fun a -> (Var ex, Var a)) tobereplacedList in  
     let exs' = removeIntermediateRes exs tobereplacedList in 
+    let temp = (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings)  in 
 
-    removeIntermediateResHelper formalArgs (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings) 
+    debug_postprocess ("temp: " ^ string_of_effect [temp]);
+
+    removeIntermediateResHelper formalArgs temp
 
   ;;
 
@@ -949,45 +973,3 @@ let postProcess (formalArgs: term list ) (eff:effect) : effect =
   in 
   helper eff
 
-
-(*
-let rec removeIntermediateRes_regularExpr (re:regularExpr): regularExpr = 
-  let re = normalise_es re in 
-  match re with 
-  | Kleene reIn -> Kleene (removeIntermediateRes_regularExpr reIn)
-  | _ ->
-  let fstLi = re_fst re in 
-  let rec helper (evLi:firstEle list) : regularExpr = 
-    match evLi with 
-    | [] -> re 
-    | [ev] ->  
-      let deri = normalise_es (derivative ev re) in 
-      (*
-      print_endline ("re: " ^string_of_regularExpr re ); 
-      print_endline ("derivatives: " ^string_of_regularExpr deri ); 
-      *)
-      (match deri with 
-      | Emp -> 
-        (match ev with 
-        | EPure _ -> event2RegularExpression ev 
-        | ECall((_, _, ret), state) -> 
-          Concate (event2RegularExpression ev, 
-          Singleton(Eq(RES, ret), state))
-
-        )
-      | _ -> 
-        if containsIntermediateRes ev then 
-        removeIntermediateRes_regularExpr deri
-        else Concate (event2RegularExpression ev,removeIntermediateRes_regularExpr deri))
-    | ev:: xs-> 
-     let re1 = helper [ev] in 
-     let re2 = helper xs in 
-     Disjunction (re1, re2)
-  in 
-  helper fstLi 
-
-
-let removeIntermediateRes_effect (disj_re:effect) : effect = 
-  List.map ~f:(fun (p, re, fc) -> p, removeIntermediateRes_regularExpr re, fc) disj_re
-
-*)

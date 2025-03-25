@@ -15,7 +15,7 @@ int main() {
   q = foo(&p); 
   free(q); 
   //Issue 4: double free
-  free(p.f); 
+  if (p.flag) free(p.f); 
   return 0; 
 }
 
