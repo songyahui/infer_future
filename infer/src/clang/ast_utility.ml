@@ -858,23 +858,53 @@ let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): 
   spec
 
 
+let getAllTermsFromEvent (ev:event) : term list = 
+  match ev with 
+  | Pos (_, args)
+  | Neg (_, args)
+  | NegTerm args -> args 
+  | ANY -> []
 
-
-let rec getResTermFromRE re : term option =    
+let rec getAllTermsFromRE re : term list =    
   match re with 
-  | Singleton _  -> None
+  | Singleton ev  -> getAllTermsFromEvent ev
   | Concate (eff1, eff2) 
-  | Disjunction (eff1, eff2) ->
-      (match getResTermFromRE eff1, getResTermFromRE eff2 with 
-      | None, None -> None 
-      | _, Some t2 
-      | Some t2, _ -> Some t2
-      )
+  | Disjunction (eff1, eff2) -> getAllTermsFromRE eff1 @ getAllTermsFromRE eff2
+  | Kleene reIn  -> getAllTermsFromRE reIn  
+  | Emp | Bot  -> [] 
+
+let getAllTermsFromFC fc : term list =
+  List.fold_left ~f:(fun acc re -> acc @ getAllTermsFromRE re) ~init:[] fc
+
+let rec getAllTermsFromPure (p:pure) : term list =
+  match p with 
+  | Gt (t1, t2)
+  | Lt (t1, t2)
+  | GtEq (t1, t2)
+  | LtEq (t1, t2)
+  | Eq (t1, t2) -> [t1; t2]
+  | PureOr (p1, p2)
+  | PureAnd (p1, p2) -> getAllTermsFromPure p1 @ getAllTermsFromPure p2
+  | Neg pIn -> getAllTermsFromPure pIn
+  | _ -> []
+  ;;
     
-  | Kleene _  -> None 
-  | _ -> None 
+  
+let postProcess (formalArgs: term list ) (eff:effect) : effect = 
+  let eff = normalise_effect eff in
 
-
+  let rec helper (eff:effect) : effect = 
+    match eff with 
+    | [] -> []
+    | (exs, p, re, fc, r) :: xs -> 
+      let allTerms = getAllTermsFromPure p @  getAllTermsFromRE re @  getAllTermsFromFC fc @ [r] in 
+      let (aux:term -> term -> int) = fun a b -> if stricTcompareTerm a b then 0 else 1 in 
+      let allUniqueTerms = List.dedup_and_sort ~compare:aux allTerms in 
+      debug_print ("allUniqueTerms: " ^ string_of_list_terms allUniqueTerms);
+      let exs' = List.filter ~f:(fun a -> List.mem allUniqueTerms (Var a) ~equal:stricTcompareTerm) exs in
+      ((exs', p, re, fc, r) :: (helper xs))
+  in 
+  helper eff
 
 
 (*
