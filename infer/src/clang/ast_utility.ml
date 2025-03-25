@@ -83,9 +83,7 @@ type term =
     | TList of term list
     | Member of term * term list
 
-       
-
-(*Arithimetic pure formulae*)
+(*Arithmetic pure formulae*)
 type pure = TRUE
           | FALSE
           | Gt of term * term

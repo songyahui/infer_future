@@ -891,19 +891,39 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | CXXConstructExpr (stmt_info, stmt_list, expr_info, cxx_construct_expr_info) -> 
     let (fp:int) = stmt_intfor2FootPrint stmt_info in 
     (*print_endline (string_of_int (List.length stmt_list));  *)
-    CValue (UNIT, fp)
+    CValue (ANY, fp)
     (*  struct st p  *)
 
   | _ -> 
     CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
 
 
-let vardecl2String (dec: Clang_ast_t.decl): string  = 
+let vardecl2String (dec: Clang_ast_t.decl): (string * (string list * pure) option)  = 
   match dec with 
-  | VarDecl (_,  named_decl_info,  _ ,  _)
-  | ParmVarDecl (_,  named_decl_info,  _ ,  _) -> 
-    named_decl_info.ni_name
-  | _ -> Clang_ast_proj.get_decl_kind_string dec
+  | VarDecl (decl_info,  named_decl_info,  qual_type , var_decl_info)
+  | ParmVarDecl (decl_info,  named_decl_info,  qual_type ,  var_decl_info) -> 
+    let varName = named_decl_info.ni_name in 
+    
+    let c_type = CAst_utils.get_type qual_type.qt_type_ptr in 
+    let preC = 
+      match c_type with 
+      | Some (PointerType _) -> 
+        let r = verifier_get_A_freeVar (Var "loc") in 
+        Some ( [r], Eq (Var varName, Var r))
+
+        (*let type_str = Clang_ast_j.string_of_c_type c_type in 
+        let name = named_decl_info.ni_name in 
+        type_str ^ " " ^ name
+        *)
+      | Some _ (* BuiltinType *)
+      | None -> None
+    in 
+
+
+
+  
+    varName, preC
+  | _ -> Clang_ast_proj.get_decl_kind_string dec, None 
 
 
 let sysfile (str:string) : bool  = 
@@ -926,29 +946,54 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
         if sysfile funcName then () (*print_endline ("skipping " ^ funcName) *)
         else
 
-          (let parameters = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> Var (vardecl2String a)) in 
+          let (parm_preC_tuple: ((string * ((string list * pure) option)) list)) = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> (vardecl2String a)) in 
+
+          debug_print ("(" ^ string_of_li (fun a -> string_of_term a) (List.map parm_preC_tuple ~f:(fun (a, _) -> Var a)) "," ^ ")");
+
+          debug_print ("(" ^ string_of_li (fun a -> match a with 
+          | None -> "None"
+          | Some (a, b) -> string_of_li (fun a -> a) a "," ^ " . " ^ string_of_pure b ^ "\n"
+          ) (List.map parm_preC_tuple ~f:(fun (a, b) -> b)) "," ^ ")");
+
+          (*debug_print (source_Address);  *)
+
+          (let (parameters: term list ) = List.map parm_preC_tuple ~f:(fun (a, _) -> Var a) in
+          
+          let (initExs:string list), (startingPure:pure) = List.fold_left parm_preC_tuple ~init:([], TRUE) 
+          ~f:(fun (accexs, acc) (_, b) -> 
+            match b with 
+            | None -> accexs, acc
+            | Some (exs, p) -> accexs@exs,  PureAnd(acc, p)
+            ) in
+
+          let preCondition = List.fold_left parm_preC_tuple ~init:TRUE
+          ~f:(fun acc (_, b) -> 
+            match b with 
+            | None ->  acc
+            | Some (exs, p) ->  PureAnd(acc, Exists(exs,  p))
+            ) in
 
           debug_print ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
-          let (defultPrecondition:effect) = [([], Ast_utility.TRUE, Emp, fc_default, Var "_" )] in
+          let (startingState:effect) = [(initExs, startingPure, Emp, fc_default, Var "_" )] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
           debug_print ("=====\n" ^ string_of_core_lang core_prog ^ "\n");
           let signature = (funcName, parameters) in 
 
-          let raw_final = normalise_effect (forward_reasoning signature defultPrecondition core_prog) in 
+          let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
           
           
           
-          debug_print("raw_final = " ^ string_of_effect raw_final);
+          debug_postprocess("raw_final = " ^ string_of_effect raw_final);
 
           let (final:effect) = normalise_effect ((postProcess parameters raw_final)) in
 
-          debug_print("final     = " ^ string_of_effect final);
+          debug_postprocess("final     = " ^ string_of_effect final);
           
 
-          let (summary:summary) =  signature, TRUE ,  raw_final in 
+          let (summary:summary) =  signature, preCondition ,  raw_final in 
 
           summaries := !summaries @ [(summary)])
       
