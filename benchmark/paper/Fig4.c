@@ -24,4 +24,16 @@ int test(void *q) {
   return 1; 
 }
 
+
+int test2(int* q) {
+  *q = 1; 
+  *q = 2; 
+}
+
+
+int test3(int q) {
+  q = 1; 
+  q = 2; 
+}
+
 //./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'

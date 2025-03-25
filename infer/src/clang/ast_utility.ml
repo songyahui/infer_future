@@ -132,7 +132,7 @@ let (summaries: (summary list)ref) = ref []
 
 
 
-let verifier_getAfreeVar term :string  =
+let verifier_get_A_freeVar term :string  =
   let prefix =
     match term with 
     | Var str -> str
@@ -264,7 +264,7 @@ let rec string_of_regularExpr re =
 
 
 
-let rec stricTcompareTerm (term1:term) (term2:term) : bool =
+let rec strict_compare_Term (term1:term) (term2:term) : bool =
   match (term1, term2) with
     (Var s1, Var s2) -> String.compare s1 s2 == 0
   | (Num n1, Num n2) -> n1 == n2
@@ -276,34 +276,34 @@ let rec stricTcompareTerm (term1:term) (term2:term) : bool =
   | (TOr (tIn1, num1), TOr (tIn2, num2)) 
   | (TCons (tIn1, num1), TCons (tIn2, num2)) 
   | (Minus (tIn1, num1), Minus (tIn2, num2)) -> 
-    stricTcompareTerm tIn1 tIn2 && stricTcompareTerm num1  num2
-  | (TNot t1, TNot t2) -> stricTcompareTerm t1 t2
-  | (TList tLi1, TList tLi2) -> stricTcompareTermList tLi1 tLi2
-  | (Member (t1, tLi1), Member (t2, tLi2)) -> stricTcompareTermList (t1::tLi1) (t2::tLi2)
+    strict_compare_Term tIn1 tIn2 && strict_compare_Term num1  num2
+  | (TNot t1, TNot t2) -> strict_compare_Term t1 t2
+  | (TList tLi1, TList tLi2) -> strict_compare_TermList tLi1 tLi2
+  | (Member (t1, tLi1), Member (t2, tLi2)) -> strict_compare_TermList (t1::tLi1) (t2::tLi2)
   | (UNIT, UNIT) | (ANY, ANY) | (RES, RES) | (Nil, Nil) | (TTrue, TTrue) | (TFalse, TFalse) -> true
   | _ -> false
 
-and  stricTcompareTermList li1 li2 = 
+and  strict_compare_TermList li1 li2 = 
   match li1, li2 with 
   | [],  [] -> true 
-  | x::xs, y::ys -> stricTcompareTerm x y && stricTcompareTermList xs ys
+  | x::xs, y::ys -> strict_compare_Term x y && strict_compare_TermList xs ys
   | _ , _ -> false 
 
 let rec compareTermList tl1 tl2 : bool = 
   match tl1, tl2 with 
   | [], [] -> true 
-  | (x:: xs, y:: ys) -> stricTcompareTerm x y && compareTermList xs ys 
+  | (x:: xs, y:: ys) -> strict_compare_Term x y && compareTermList xs ys 
   | _ -> false 
 
 let rec comparePure (pi1:pure) (pi2:pure):bool = 
   match (pi1 , pi2) with 
     (TRUE, TRUE) -> true
   | (FALSE, FALSE) -> true 
-  | (Gt (t1, t11), Gt (t2, t22)) -> stricTcompareTerm t1 t2 && stricTcompareTerm t11  t22
-  | (Lt (t1, t11), Lt (t2, t22)) -> stricTcompareTerm t1 t2 && stricTcompareTerm t11  t22
-  | (GtEq (t1, t11), GtEq (t2, t22)) -> stricTcompareTerm t1 t2 && stricTcompareTerm t11  t22
-  | (LtEq (t1, t11), LtEq (t2, t22)) -> stricTcompareTerm t1 t2 && stricTcompareTerm t11  t22
-  | (Eq (t1, t11), Eq (t2, t22)) -> stricTcompareTerm t1 t2 && stricTcompareTerm t11  t22
+  | (Gt (t1, t11), Gt (t2, t22)) -> strict_compare_Term t1 t2 && strict_compare_Term t11  t22
+  | (Lt (t1, t11), Lt (t2, t22)) -> strict_compare_Term t1 t2 && strict_compare_Term t11  t22
+  | (GtEq (t1, t11), GtEq (t2, t22)) -> strict_compare_Term t1 t2 && strict_compare_Term t11  t22
+  | (LtEq (t1, t11), LtEq (t2, t22)) -> strict_compare_Term t1 t2 && strict_compare_Term t11  t22
+  | (Eq (t1, t11), Eq (t2, t22)) -> strict_compare_Term t1 t2 && strict_compare_Term t11  t22
   | (PureOr (p1, p2), PureOr (p3, p4)) ->
       (comparePure p1 p3 && comparePure p2 p4) || (comparePure p1 p4 && comparePure p2 p3)
   | (PureAnd (p1, p2), PureAnd (p3, p4)) ->
@@ -316,7 +316,7 @@ let normalise_terms (t:term) : term =
   match t with 
 
   | Minus (Minus(_end, b), Minus(_end1, Plus(b1, inc))) -> 
-    if stricTcompareTerm _end _end1 && stricTcompareTerm b b1 then inc 
+    if strict_compare_Term _end _end1 && strict_compare_Term b b1 then inc 
     else t 
 
   | Minus(Plus((Var x),( Num n1)), Plus(Minus((Var x1),( Var y)), ( Num n2))) -> 
@@ -328,12 +328,12 @@ let normalise_terms (t:term) : term =
 
   
   | Minus (t1, t2) -> 
-    if stricTcompareTerm t1 t2 then (Num 0)
+    if strict_compare_Term t1 t2 then (Num 0)
     else 
 
     (match t2 with
     | Minus (t21, t3) -> 
-      if stricTcompareTerm t1 t21 then t3 
+      if strict_compare_Term t1 t21 then t3 
       else t 
     | _ -> t )
     
@@ -458,8 +458,8 @@ let entailConstrains pi1 pi2 =
 let rec getUnification pi t l : pure option = 
   match pi with 
   | Eq (t1, t2 ) -> 
-    if stricTcompareTerm t1 t then Some (Eq(t2, Var l)) 
-    else if stricTcompareTerm t2 t then Some (Eq(t1, Var l)) 
+    if strict_compare_Term t1 t then Some (Eq(t2, Var l)) 
+    else if strict_compare_Term t2 t then Some (Eq(t1, Var l)) 
     else None 
   | PureAnd (p1, p2) -> 
     (match getUnification p1 t l with 
@@ -740,7 +740,7 @@ let substitute_term_aux (t:term) (actual_formal_mappings:((term*term)list)): ter
     match li with 
     | [] -> None 
     | (arctual, formal)::xs  -> 
-      if stricTcompareTerm formal t then Some arctual
+      if strict_compare_Term formal t then Some arctual
       else helper xs 
   in 
   match helper actual_formal_mappings with 
@@ -791,7 +791,7 @@ let rec substitute_pure (p:pure) (actual_formal_mappings:((term*term)list)): pur
   match p with 
   | Gt (a, b) -> 
     let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
-    Gt (a', b')
+     Gt (a', b')
 
   | Lt (a, b) -> 
     let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
@@ -807,6 +807,8 @@ let rec substitute_pure (p:pure) (actual_formal_mappings:((term*term)list)): pur
 
   | Eq (a, b) -> 
     let (a', b') = substitute_term_pair (a, b) actual_formal_mappings in 
+    if strict_compare_Term a' b' then TRUE
+    else
     Eq (a', b')
 
   | PureOr (p1, p2) -> 
@@ -889,20 +891,61 @@ let rec getAllTermsFromPure (p:pure) : term list =
   | _ -> []
   ;;
     
+
+let rec findATermEquleToX (p:pure) (x:string) : string list = 
+  match p with
+  | Eq (Var a, Var b) -> 
+    if String.compare a b == 0 then [] 
+    else 
+      if String.compare a x == 0 then [b]
+      else if String.compare b x == 0 then [a]
+      else []
+  | PureAnd (p1, p2) -> findATermEquleToX p1 x @ findATermEquleToX p2 x
+  | _ -> []
+
+let rec findReplacebleVar exs p formalArgs : (string * string list) option = 
+  match exs with 
+  | [] -> None 
+  | x :: xs -> 
+    let allTermEquleToX = findATermEquleToX p x in 
+    let allTermEquleToXNotIO = List.filter ~f:(fun a -> if existAux strict_compare_Term formalArgs (Var a) then false else true  ) allTermEquleToX in
+    (match allTermEquleToXNotIO with 
+    | [] -> findReplacebleVar xs p formalArgs 
+    | rest -> Some (x, rest)
+    )
+
+;;
+
+let removeIntermediateRes exs eqVars = 
+  List.filter ~f:(fun ex -> existAux (fun a b -> if String.compare a b == 0 then false else true) eqVars ex ) exs
+
+
+let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r) : singleEffect = 
+  match findReplacebleVar exs p formalArgs with 
+  | None -> (exs, p, re, fc, r)
+  | Some (ex, tobereplacedList) -> 
+    let mappings = List.map ~f:(fun a -> (Var ex, Var a)) tobereplacedList in  
+    let exs' = removeIntermediateRes exs tobereplacedList in 
+
+    removeIntermediateResHelper formalArgs (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings) 
+
+  ;;
+
+
+let removeIntermediateRes formalArgs ((exs, p, re, fc, r):singleEffect) : singleEffect =
+
+  let (a, b, c, d, r) = removeIntermediateResHelper formalArgs (exs, p, re, fc, r) in
+  (a, b, c, d, r)
+;; 
   
 let postProcess (formalArgs: term list ) (eff:effect) : effect = 
-  let eff = normalise_effect eff in
 
   let rec helper (eff:effect) : effect = 
     match eff with 
     | [] -> []
-    | (exs, p, re, fc, r) :: xs -> 
-      let allTerms = getAllTermsFromPure p @  getAllTermsFromRE re @  getAllTermsFromFC fc @ [r] in 
-      let (aux:term -> term -> int) = fun a b -> if stricTcompareTerm a b then 0 else 1 in 
-      let allUniqueTerms = List.dedup_and_sort ~compare:aux allTerms in 
-      debug_print ("allUniqueTerms: " ^ string_of_list_terms allUniqueTerms);
-      let exs' = List.filter ~f:(fun a -> List.mem allUniqueTerms (Var a) ~equal:stricTcompareTerm) exs in
-      ((exs', p, re, fc, r) :: (helper xs))
+    | single :: xs -> 
+      removeIntermediateRes formalArgs single :: helper xs
+
   in 
   helper eff
 

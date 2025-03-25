@@ -474,7 +474,7 @@ let rec compose_effects (eff:singleEffect) eff2 (fp:int)=
 
 let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)) (newr:string): singleEffect = 
   let (exs, p, es, fc, ret) = spec in 
-  let (newexs:string list) = List.map ~f:(fun a -> verifier_getAfreeVar (Var a)) exs in 
+  let (newexs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) exs in 
   let string2Term li = (List.map ~f:(fun a -> Var a) li) in   
   let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2Term newexs) (string2Term exs) in 
 
@@ -484,7 +484,7 @@ let renamePreCond(summary:summary) :summary *  string list =
   let (signature, preCond, effects) = summary in 
   match preCond with 
   | Exists (strLi, pIn) -> 
-    let (newexs:string list) = List.map ~f:(fun a -> verifier_getAfreeVar (Var a)) strLi in 
+    let (newexs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) strLi in 
     let string2Term li = (List.map ~f:(fun a -> Var a) li) in   
     let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2Term newexs) (string2Term strLi) in 
     let preCond' =  Exists (newexs, substitute_pure pIn exs_mappsing) in 
@@ -504,21 +504,28 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
   match expr with 
   | CValue(t, fp) -> 
-    let r = verifier_getAfreeVar t  in 
-    let final = [(exs@[r], PureAnd(p, Eq(Var r, t)), re , fc, Var r)] in 
+    let final = [(exs, p, re, fc, t)] in 
     final 
   
   | CSeq (e1, e2) -> 
     let effect1 = aux e1 state in
     let effect2 = forward_reasoning signature effect1 e2 in
     effect2 
+
   
   | CAssign (v, e, fp) -> 
     let effect1 = aux e state in 
-    let r = verifier_getAfreeVar v in 
-    let effect1' = substitute_effect effect1 [(Var r, v)] in 
-    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@[r], PureAnd(p, Eq(v, ret)), re, fc, UNIT)) effect1'
-    
+
+    let effect1', extensionR = 
+      (* check if v has occurred before or not *)
+      let allTerms_fromPure = getAllTermsFromPure p in 
+        if existAux (fun t1 t2 -> strict_compare_Term t1 t2 ) allTerms_fromPure v 
+        then (* if yes, then rename it to r *)
+          let r = verifier_get_A_freeVar v in 
+          substitute_effect effect1 [(Var r, v)], [r]
+        else (* if no, just leave it and there is no fresh variable crated  *)
+          effect1, [] in 
+    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT)) effect1'
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret)]
 
@@ -543,7 +550,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
 
       let (_, foramlArgs), preC, postSummary = summary in 
-      let r = verifier_getAfreeVar UNIT in 
+      let r = verifier_get_A_freeVar UNIT in 
 
       let mappings = (actual_formal_mappings xs foramlArgs)  in 
 
@@ -566,26 +573,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
         composeStates
       )
     )
-
-  
-    
   | _ -> [state]
-
-  (*
-
-
-
-  | CFunCall (f, xs, fp) -> 
-    let (extension) = dealWithFunctionCall None f xs fp in 
-    concateSummaries current extension
-
-  | CFunCall of string * (core_value) list * state
-  | CWhile of pure * core_lang * state
-  | CBreak of state 
-  | CContinue of state 
-  | CLable of string * state 
-  | CGoto of string * state 
-  *)
   in 
   List.fold_left ~f:(fun acc a -> acc @ aux prog a) ~init:[] states 
 
@@ -639,7 +627,7 @@ let rec creatIntermidiateValue4execution (li:term list) state : ((core_lang list
     let cl1, tLi1  = 
       match x with 
       | TApp (str, terms) -> 
-        let ex = Var (verifier_getAfreeVar UNIT) in 
+        let ex = Var (verifier_get_A_freeVar UNIT) in 
         [(CAssign(ex, CFunCall(str, terms, state), state))], [ex]
       | _ -> [], [x]
         
@@ -948,12 +936,18 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           debug_print ("=====\n" ^ string_of_core_lang core_prog ^ "\n");
           let signature = (funcName, parameters) in 
 
-          let raw_final = (forward_reasoning signature defultPrecondition core_prog) in 
-          let (final:effect) = ((postProcess parameters raw_final)) in
+          let raw_final = normalise_effect (forward_reasoning signature defultPrecondition core_prog) in 
+          
+          
+          
+          debug_print("raw_final = " ^ string_of_effect raw_final);
 
+          let (final:effect) = normalise_effect ((postProcess parameters raw_final)) in
 
+          debug_print("final     = " ^ string_of_effect final);
+          
 
-          let (summary:summary) =  signature, TRUE ,  final in 
+          let (summary:summary) =  signature, TRUE ,  raw_final in 
 
           summaries := !summaries @ [(summary)])
       
