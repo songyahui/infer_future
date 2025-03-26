@@ -22,7 +22,8 @@
 
 /*@ write(fd, buf, size) =
     REQ  TRUE
-    ENS (r : TRUE ; write(fd) ;  (_)^* ; r) @*/
+    ENS (r : !(r=-1) ; write(fd) ;  (_)^* ; r) 
+    \/ (r : r=-1 ; 𝝐 ; close(fd) · exit(-1) · (_)^* ; r)  @*/
 
 /*@ read(fd, buf, size) =
     REQ  TRUE
