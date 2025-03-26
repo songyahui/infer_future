@@ -128,7 +128,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
     else ((Num (int_of_string(int_str))))
       (*Some ((Num (int_of_string(int_str))))*)
     
-  | DeclRefExpr (stmt_info, _, _, decl_ref_expr_info) -> 
+  | DeclRefExpr (stmt_info, _, expr_info, decl_ref_expr_info) -> 
     let (sl1, sl2) = stmt_info.si_source_range in 
 
     (match decl_ref_expr_info.drti_decl_ref with 
@@ -138,11 +138,20 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
       (
       match decl_ref.dr_name with 
       | None -> ((Var(Clang_ast_proj.get_stmt_kind_string instr ^"(!!!stmt2Term, DeclRefExpr2)"))) 
-      | Some named_decl_info -> ((Var (named_decl_info.ni_name)))
+      | Some named_decl_info -> 
+        let c_type = CAst_utils.get_type expr_info.ei_qual_type.qt_type_ptr in 
+        
+        (match c_type with 
+          | Some (PointerType _) -> ((Pointer (named_decl_info.ni_name)))
+            
+          | _ -> ((Var (named_decl_info.ni_name)))
+
+        )
+        
       
       )
     )
-  | NullStmt _ -> ((Var ("NULL")))
+  | NullStmt _ -> (Nil)
 
   | ArraySubscriptExpr (_, arlist, _)  -> 
 
@@ -176,15 +185,6 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
 
   | RecoveryExpr (_, [], _) -> ((Num(0))) 
     
-    (*let str = 
-      let rec straux li = 
-      match li with 
-      | [] -> ""
-      | x :: xs  -> x  ^ " " ^ straux xs 
-      in  straux str_list
-    in 
-    Some ((Var("\"" ^ str ^ "\""))) 
-    *)
 
   | ConditionalOperator (_, x::y::_, _) -> stmt2Term y 
   | StringLiteral (_, _, _, _)
@@ -898,7 +898,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
 
 
-let vardecl2String (dec: Clang_ast_t.decl): (string * (string list * pure) option)  = 
+let vardecl2String_with_type (dec: Clang_ast_t.decl): (string * (string list * pure) option)  = 
   match dec with 
   | VarDecl (decl_info,  named_decl_info,  qual_type , var_decl_info)
   | ParmVarDecl (decl_info,  named_decl_info,  qual_type ,  var_decl_info) -> 
@@ -918,12 +918,26 @@ let vardecl2String (dec: Clang_ast_t.decl): (string * (string list * pure) optio
       | Some _ (* BuiltinType *)
       | None -> None
     in 
-
-
-
-  
     varName, preC
   | _ -> Clang_ast_proj.get_decl_kind_string dec, None 
+
+
+let vardecl2String (dec: Clang_ast_t.decl): term  = 
+  match dec with 
+  | VarDecl (decl_info,  named_decl_info,  qual_type , var_decl_info)
+  | ParmVarDecl (decl_info,  named_decl_info,  qual_type ,  var_decl_info) -> 
+    let varName = named_decl_info.ni_name in 
+    let c_type = CAst_utils.get_type qual_type.qt_type_ptr in 
+        
+        (match c_type with 
+          | Some (PointerType _) -> Pointer varName
+            
+          | _ -> Var varName
+
+        )
+        
+    
+  | _ -> Var (Clang_ast_proj.get_decl_kind_string dec) 
 
 
 let sysfile (str:string) : bool  = 
@@ -946,36 +960,14 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
         if sysfile funcName then () (*print_endline ("skipping " ^ funcName) *)
         else
 
-          let (parm_preC_tuple: ((string * ((string list * pure) option)) list)) = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> (vardecl2String a)) in 
-
-          debug_print ("(" ^ string_of_li (fun a -> string_of_term a) (List.map parm_preC_tuple ~f:(fun (a, _) -> Var a)) "," ^ ")");
-
-          debug_print ("(" ^ string_of_li (fun a -> match a with 
-          | None -> "None"
-          | Some (a, b) -> string_of_li (fun a -> a) a "," ^ " . " ^ string_of_pure b ^ "\n"
-          ) (List.map parm_preC_tuple ~f:(fun (a, b) -> b)) "," ^ ")");
-
           (*debug_print (source_Address);  *)
 
-          (let (parameters: term list ) = List.map parm_preC_tuple ~f:(fun (a, _) -> Var a) in
+          (let (parameters: term list ) = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> (vardecl2String a)) in 
           
-          let (initExs:string list), (startingPure:pure) = List.fold_left parm_preC_tuple ~init:([], TRUE) 
-          ~f:(fun (accexs, acc) (_, b) -> 
-            match b with 
-            | None -> accexs, acc
-            | Some (exs, p) -> accexs@exs,  PureAnd(acc, p)
-            ) in
-
-          let preCondition = List.fold_left parm_preC_tuple ~init:TRUE
-          ~f:(fun acc (_, b) -> 
-            match b with 
-            | None ->  acc
-            | Some (exs, p) ->  PureAnd(acc, Exists(exs,  p))
-            ) in
 
           debug_print ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
-          let (startingState:effect) = [(initExs, startingPure, Emp, fc_default, Var "_" )] in
+          let (startingState:effect) = [([], TRUE, Emp, fc_default, Var "_" )] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
@@ -984,8 +976,6 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
           
-          
-          
           debug_postprocess("raw_final = " ^ string_of_effect raw_final);
 
           let (final:effect) = normalise_effect ((postProcess parameters raw_final)) in
@@ -993,7 +983,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           debug_postprocess("final     = " ^ string_of_effect final);
           
 
-          let (summary:summary) =  signature, preCondition ,  raw_final in 
+          let (summary:summary) =  signature, TRUE, raw_final in 
 
           summaries := !summaries @ [(summary)])
       

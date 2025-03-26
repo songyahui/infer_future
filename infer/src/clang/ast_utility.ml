@@ -54,8 +54,6 @@ let nonDetermineFunCall = ["__nondet_int";"__VERIFIER_nondet_int"]
 
 let current_source_file = ref ""
 
-
-
 type state = int
 
 type bin_op = GT | LT | EQ | GTEQ | LTEQ
@@ -67,6 +65,7 @@ type term =
     | RES
     | Num of int
     | Var of string
+    | Pointer of string  
     | Plus of term * term 
     | Minus of term * term 
     | Rel of bin_op * term * term 
@@ -198,6 +197,8 @@ let rec string_of_term t : string =
   | TAnd (a, b) -> Format.asprintf "(%s&&%s)" (string_of_term a) (string_of_term b)
   | TOr (a, b) -> Format.asprintf "%s || %s" (string_of_term a) (string_of_term b)
   | Var str -> str
+  | Pointer str -> "*" ^ str
+
   | Rel (bop, t1, t2) ->
     "(" ^ string_of_term t1 ^ (match bop with | EQ -> "==" | _ -> string_of_bin_op bop) ^ string_of_term t2 ^ ")"
   | Plus (t1, t2) -> "(" ^string_of_term t1 ^ "+" ^ string_of_term t2^ ")"

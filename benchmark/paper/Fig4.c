@@ -6,7 +6,7 @@ void *foo(struct st *p){
   void *q;
   if (p->flag) q = malloc(1);  
   else q = p->f; 
-  return q;}
+  return q; }
 
 int main() {
   struct st p; 
@@ -31,9 +31,10 @@ int test2(int* q) {
 }
 
 
-int test3(int q) {
-  q = 1; 
-  q = 2; 
+int test3(int q) 
+// req true, ens ret = 0
+{
+  q = 1;
 }
 
 //./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'
