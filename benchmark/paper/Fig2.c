@@ -13,7 +13,7 @@ void open_and_write(const char* path)
 { 
     int fd = open(path, O_RDONLY); 
     if (fd==-1) exit(-1); 
-    ssize_t bytes = write(fd, "m", 1); 
+    //ssize_t bytes = write(fd, "m", 1); 
     close(fd);
     return; 
 }

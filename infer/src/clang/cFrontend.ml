@@ -470,8 +470,12 @@ let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect =
       if ec1 < 0 then eff :: compose_effects eff xs fp 
       else 
         let (exs', p', re', fc', ret', ec2) = x in 
-        let fc_subtracted = trace_subtraction p p' (removeAny fc) re' fp in 
-        (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret', ec2) :: compose_effects eff xs fp 
+        let fc_subtracted = normalise_fc (trace_subtraction p p' (removeAny fc) re' fp) in 
+        let errorCode = match fc_subtracted with 
+        | [Bot] -> errorCode_exit
+        | _ -> ec2
+        in 
+        (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret', errorCode) :: compose_effects eff xs fp 
 
 
 let string2TermLi li = (List.map ~f:(fun a -> Var a) li) 
@@ -599,7 +603,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   in 
   List.fold_left ~f:(fun acc (a :singleEffect )-> 
     let (_, _ ,_, _, _,  errorCode) = a in 
-    if errorCode < 0 then acc 
+    if errorCode < 0 then acc @ [a] 
     else acc @ aux prog a) ~init:[] (normalise_effect states) 
 
 
@@ -1012,15 +1016,22 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           let signature = (funcName, parameters) in 
 
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
-          
           debug_print("\nraw_final = " ^ string_of_effect raw_final);
 
           let (final:effect) = normalise_effect ((postProcess parameters raw_final)) in
-
           debug_print("\nfinal     = " ^ string_of_effect final);
+
+          let resetErrorCode = List.fold_left ~f:(
+            fun acc (a, b, c, d, e, f) -> 
+              let extra = 
+                if f == errorCode_return then [(a, b, c, d, e, 0)] (* reset the ones for return *)
+                else  [(a, b, c, d, e, f)]               
+              in 
+              acc@ extra  )
+            ~init:[] final in 
           
 
-          let (summary:summary) =  signature, TRUE, raw_final in 
+          let (summary:summary) =  signature, TRUE, resetErrorCode in 
 
           summaries := !summaries @ [(summary)])
       

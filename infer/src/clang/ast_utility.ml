@@ -1,5 +1,13 @@
 open Z3
 
+
+let errorCode_normal = 0 
+let errorCode_return = -1 
+let errorCode_exit = -2 
+
+let errorCode_failure = -3
+
+
 let retKeyword = "Return"
 let finalReport = (ref "")
 let verifier_counter: int ref = ref 0;;
@@ -681,10 +689,17 @@ let rec removeAny fcIn =
     else temp
 
 let normalise_fc (fc:futureCond) : futureCond = 
+  let rec existBot (fcIn:futureCond) : bool =
+    match fcIn with 
+    | [] -> false 
+    | Bot :: _ -> true 
+    | _ :: xs -> existBot xs 
+  in 
   (*debug_print ("original_fc: " ^ string_of_fc fc ); *) 
   let fc' = (List.map ~f:normalise_es fc) in 
   (*debug_print ("normalised fc: " ^ string_of_fc fc' ); *)
-  removeAny fc' 
+  if existBot fc' then [Bot] 
+  else removeAny fc' 
 
 
 

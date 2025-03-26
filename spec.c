@@ -32,6 +32,6 @@
     REQ  TRUE
     ENS (r : r=code ; exit(code) ; (_)^* ; r; -2 ) @*/
 
-/*@ return(ret) =
+/*@ return(t) =
     REQ  TRUE
-    ENS (r : r=ret ; return(code) ; (_)^* ; r; -1) @*/
+    ENS ( : TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
