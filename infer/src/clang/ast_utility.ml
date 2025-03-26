@@ -65,7 +65,7 @@ type term =
     | RES
     | Num of int
     | Var of string
-    | Pointer of string  
+    (* | Pointer of string   *)
     | Plus of term * term 
     | Minus of term * term 
     | Rel of bin_op * term * term 
@@ -122,8 +122,10 @@ type futureCond = regularExpr list
 
 let fc_default =  [(Kleene (Singleton ANY))]
 
+type exitCode = int 
+
 (* string list are the existential vars *)
-type singleEffect = (string list * pure * regularExpr * futureCond * term)
+type singleEffect = (string list * pure * regularExpr * futureCond * term * exitCode)
 type effect = (singleEffect list)
 
 type precondition = pure 
@@ -197,8 +199,8 @@ let rec string_of_term t : string =
   | TAnd (a, b) -> Format.asprintf "(%s&&%s)" (string_of_term a) (string_of_term b)
   | TOr (a, b) -> Format.asprintf "%s || %s" (string_of_term a) (string_of_term b)
   | Var str -> str
-  | Pointer str -> "*" ^ str
-
+  (* | Pointer str -> "*" ^ str
+*)
   | Rel (bop, t1, t2) ->
     "(" ^ string_of_term t1 ^ (match bop with | EQ -> "==" | _ -> string_of_bin_op bop) ^ string_of_term t2 ^ ")"
   | Plus (t1, t2) -> "(" ^string_of_term t1 ^ "+" ^ string_of_term t2^ ")"
@@ -688,22 +690,23 @@ let normalise_fc (fc:futureCond) : futureCond =
 
 
 let rec normalise_effect (summary:effect)  : effect = 
-  let normalise_effect_a_pair (exs, p, re, fc, r) = 
+  let normalise_effect_a_pair (exs, p, re, fc, r, exitCode) = 
     let p' = normalise_pure p in
     if entailConstrains p' FALSE then []
-    else [(exs, normalise_pure p, normalise_es re, normalise_fc fc, r)] in 
+    else [(exs, normalise_pure p, normalise_es re, normalise_fc fc, r, exitCode)] in 
   match summary with 
   | [] -> []
   | x :: xs -> (normalise_effect_a_pair x)  @  (normalise_effect xs)
 
 let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
 
-let string_of_single_effect (exs, p, re, fc, r) = 
-  "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r 
+let string_of_single_effect (exs, p, re, fc, r, exitCode) = 
+  "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r  (* ^ " ; " ^ string_of_int exitCode *) 
+
 
 let rec string_of_effect (summary:effect) = 
 
-  let string_of_a_pair (exs, p, re, fc, r) = string_of_single_effect (exs, p, re, fc, r) in 
+  let string_of_a_pair (exs, p, re, fc, r, exitCode) = string_of_single_effect (exs, p, re, fc, r, exitCode) in 
     
     
 
@@ -858,12 +861,12 @@ let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)
 let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = (List.map ~f:(fun fce -> substitute_RE fce actual_formal_mappings) fc)
 
 let substitute_single_effect (spec:singleEffect) (actual_formal_mappings:((term*term)list)): singleEffect =
-  let (exs, p, re, fc, r) = spec in 
+  let (exs, p, re, fc, r, exitCode) = spec in 
   let p' = substitute_pure p actual_formal_mappings in 
   let re' = substitute_RE re actual_formal_mappings in 
   let fc' = substitute_FC fc actual_formal_mappings in 
   let r' = substitute_term r actual_formal_mappings in 
-  (exs, p', re', fc', r')
+  (exs, p', re', fc', r', exitCode)
 
 let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): effect =
   List.map ~f:(fun single -> 
@@ -938,15 +941,15 @@ let rec removeIntermediateRes exs tobereplacedList =
 
 
 
-let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r) : singleEffect = 
+let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r, exitCode) : singleEffect = 
   match findReplacebleVar exs p formalArgs with 
-  | None -> (exs, p, re, fc, r)
+  | None -> (exs, p, re, fc, r, exitCode)
   | Some (ex, tobereplacedList) -> 
     debug_postprocess ("\n========\nex: " ^ ex);
     debug_postprocess ("tobereplacedList: " ^ string_of_li (fun a-> a) tobereplacedList " ");
     let mappings = List.map ~f:(fun a -> (Var ex, Var a)) tobereplacedList in  
     let exs' = removeIntermediateRes exs tobereplacedList in 
-    let temp = (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings)  in 
+    let temp = (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings, exitCode)  in 
 
     debug_postprocess ("temp: " ^ string_of_effect [temp]);
 
@@ -955,10 +958,10 @@ let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r) : singleEffec
   ;;
 
 
-let removeIntermediateRes formalArgs ((exs, p, re, fc, r):singleEffect) : singleEffect =
+let removeIntermediateRes formalArgs ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect =
 
-  let (a, b, c, d, r) = removeIntermediateResHelper formalArgs (exs, p, re, fc, r) in
-  (a, b, c, d, r)
+  let (a, b, c, d, r, ec) = removeIntermediateResHelper formalArgs (exs, p, re, fc, r, exitCode) in
+  (a, b, c, d, r, ec)
 ;; 
   
 let postProcess (formalArgs: term list ) (eff:effect) : effect = 

@@ -43,6 +43,9 @@
 %type <(Ast_utility.term list)> list_of_terms
 %type <(string list)> list_of_exs
 %type <(Ast_utility.event)>  not_event
+%type <(int)> errCode
+
+
 
 
 %%
@@ -123,7 +126,11 @@ futureCond:
 | s = es {[s]}
 | li= futureCond CONJ s = es {li@[s]}
 
-singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=VAR RPAR {(strs, p, es, fc, Var r)}
+errCode:
+| {0}
+| SEMI i = INTE {i}
+
+singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=VAR ec=errCode RPAR {(strs, p, es, fc, Var r, ec)}
 
 effect:
 | s = singleEffect {[s]}

@@ -2,13 +2,11 @@
 #include <unistd.h>   // For write(), close()
 #include <stdlib.h>   // For exit()
 
-int test(int x) 
-{ 
 
-    int a = 1; 
-    a = x + 1; 
-    a = a + 2;
-    return x; 
+void test(const char* path) 
+{ 
+    int fd = open(path, O_RDONLY); 
+    return; 
 }
 
 void open_and_write(const char* path) 
@@ -21,6 +19,7 @@ void open_and_write(const char* path)
 }
 
 
+/*
 void open_and_write1(const char* path) {
     // Open the file in write-only mode, create it if it doesn't exist, and truncate it if it does.
     int fd = open(path, O_RDONLY);
@@ -40,5 +39,6 @@ void open_and_write1(const char* path) {
     // Close the file descriptor.
     close(fd);
 }
+    */
 
 //infer/bin/infer run -- clang -c benchmark/paper/Fig2.c

@@ -142,7 +142,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
         let c_type = CAst_utils.get_type expr_info.ei_qual_type.qt_type_ptr in 
         
         (match c_type with 
-          | Some (PointerType _) -> ((Pointer (named_decl_info.ni_name)))
+          | Some (PointerType _) -> (((* Pointer *) Var (named_decl_info.ni_name)))
             
           | _ -> ((Var (named_decl_info.ni_name)))
 
@@ -404,8 +404,8 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
   | Some n -> n )
 
 let enforecePureSingleEffect (p:pure) (re:singleEffect) : singleEffect = 
-  let (exs, a, b, c, r) = re in 
-  (exs, PureAnd(a, p), b, c, r)
+  let (exs, a, b, c, r, errorCode) = re in 
+  (exs, PureAnd(a, p), b, c, r, errorCode)
   
 
 let enforecePure (p:pure) (re:effect) : effect = 
@@ -421,7 +421,7 @@ let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : summary
     else findSpecifictaionSummaries f xs 
 
 let add_exs exs1 effect : effect = 
-  List.map ~f:(fun (exs, p, re, fc, r) -> (exs@exs1, p, re, fc, r)) effect 
+  List.map ~f:(fun (exs, p, re, fc, r, errorCode) -> (exs@exs1, p, re, fc, r, errorCode)) effect 
 
 let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr =
   match es with 
@@ -462,26 +462,46 @@ let trace_subtraction (lhsp:pure) (rhsp:pure) (fc: futureCond) (es:regularExpr) 
   debug_printTraceSubtraction ("res = " ^ string_of_fc res ^ "\n");
   res
 
-let rec compose_effects (eff:singleEffect) eff2 (fp:int)= 
+let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect = 
     match eff2 with
     | [] -> []
     | x :: xs -> 
-      let (exs, p, re, fc, _) = eff in 
-      let (exs', p', re', fc', ret') = x in 
-      let fc_subtracted = trace_subtraction p p' (removeAny fc) re' fp in 
-      (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret') :: compose_effects eff xs fp 
+      let (exs, p, re, fc, _, ec1) = eff in 
+      if ec1 < 0 then eff :: compose_effects eff xs fp 
+      else 
+        let (exs', p', re', fc', ret', ec2) = x in 
+        let fc_subtracted = trace_subtraction p p' (removeAny fc) re' fp in 
+        (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret', ec2) :: compose_effects eff xs fp 
 
+
+let string2TermLi li = (List.map ~f:(fun a -> Var a) li) 
 
 let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)) (newr:string): singleEffect = 
-  let (exs, p, es, fc, ret) = spec in 
+  let (exs, p, es, fc, ret, errorCode) = spec in 
   let (newexs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) exs in 
-  let string2Term li = (List.map ~f:(fun a -> Var a) li) in   
-  let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2Term newexs) (string2Term exs) in 
+  let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2TermLi newexs) (string2TermLi exs) in 
 
-  substitute_single_effect (newexs, p, es, fc, ret) (mappings@ exs_mappsing @[(Var newr, ret)])
+  substitute_single_effect (newexs, p, es, fc, ret, errorCode) (mappings@ exs_mappsing @[(Var newr, ret)])
 
-let renamePreCond(summary:summary) :summary *  string list = 
-  let (signature, preCond, effects) = summary in 
+
+
+let renameALLLocalVar(summary:summary) :summary = 
+  
+  (*
+
+  let ((name, old_formal_Args), preCond, effects) = summary in
+
+  let (new_formal_Args:term list) = List.map ~f:(fun a -> Var (verifier_get_A_freeVar a)) old_formal_Args in 
+  let mappings = actual_formal_mappings new_formal_Args old_formal_Args in 
+  let preCond' = substitute_pure preCond mappings in
+  let effects' = substitute_effect effects mappings in 
+
+    let effects'' = List.map ~f:(fun (exs, p, es, fc) -> 
+  ) effects' in 
+*)
+  summary
+
+  (*
   match preCond with 
   | Exists (strLi, pIn) -> 
     let (newexs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) strLi in 
@@ -490,22 +510,20 @@ let renamePreCond(summary:summary) :summary *  string list =
     let preCond' =  Exists (newexs, substitute_pure pIn exs_mappsing) in 
     let effects' = substitute_effect effects exs_mappsing in 
     (signature, preCond', effects'), newexs
-
-
-    
   | _ -> summary, []
+  *)
 
   
 
 let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang) : effect = 
 
   let rec aux expr (state:singleEffect) : effect = 
-  let (exs, p, re, fc, ret) = state in
+  let (exs, p, re, fc, ret, errorCode) = state in
   
 
   match expr with 
   | CValue(t, fp) -> 
-    let final = [(exs, p, re, fc, t)] in 
+    let final = [(exs, p, re, fc, t, errorCode)] in 
     final 
   
   | CSeq (e1, e2) -> 
@@ -513,7 +531,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let effect2 = forward_reasoning signature effect1 e2 in
     effect2 
 
-  
+
   | CAssign (v, e, fp) -> 
     let effect1 = aux e state in 
 
@@ -526,9 +544,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
           substitute_effect effect1 [(Var r, v)], [r]
         else (* if no, just leave it and there is no fresh variable crated  *)
           effect1, [] in 
-    List.map ~f:(fun (exs, p, re, fc, ret) -> (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT)) effect1'
+    List.map ~f:(fun (exs, p, re, fc, ret, errorCode) -> (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT, errorCode)) effect1'
     
-  | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret)]
+  | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret, errorCode)]
 
   | CIfELse (p, e1, e2, _) -> 
     let current1 = enforecePure p [state] in 
@@ -545,7 +563,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     (match f_summary with 
     | None -> [state]
     | Some summary -> 
-      let summary, ex_preCond = renamePreCond summary in 
+      let summary = renameALLLocalVar summary in 
       debug_printCFunCall ("current state : " ^ string_of_effect [state]); 
       debug_printCFunCall ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
       debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
@@ -560,23 +578,29 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       (* Check pre condition *) 
       (match (checkPreCondition (PureAnd (p, constriants4Mapping)) preC) with 
       | None -> (debug_printCFunCall ("checkPreCondition ERROR!");
-                [([], FALSE, Bot, [], Var "_")])
+                [([], FALSE, Bot, [], Var "_", -1)])
       | Some resdue -> 
         debug_printCFunCall ("residue: " ^ string_of_pure resdue);
         let state = enforecePureSingleEffect resdue state in 
         
-        (* Compose pre condition *) 
-        let substitutedSummary = List.fold_left 
+        (* substitute the formal arguments and rename all the existential variables  *) 
+        let substitutedPostSummary = List.fold_left 
           ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings r]) ~init:[] postSummary  in 
-        debug_printCFunCall ("substitutedSummary : " ^ string_of_effect substitutedSummary); 
-        let composeStates =  add_exs (r::ex_preCond) (compose_effects state substitutedSummary fp) in 
+        debug_printCFunCall ("substitutedSummary : " ^ string_of_effect substitutedPostSummary); 
+
+        (* Compose post condition *) 
+        let composeStates =  add_exs ([r]) (compose_effects state substitutedPostSummary fp) in 
         debug_printCFunCall ("composeStates : " ^ string_of_effect composeStates); 
+
         composeStates
       )
     )
   | _ -> [state]
   in 
-  List.fold_left ~f:(fun acc a -> acc @ aux prog a) ~init:[] (normalise_effect states) 
+  List.fold_left ~f:(fun acc (a :singleEffect )-> 
+    let (_, _ ,_, _, _,  errorCode) = a in 
+    if errorCode < 0 then acc 
+    else acc @ aux prog a) ~init:[] (normalise_effect states) 
 
 
 
@@ -697,7 +721,6 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
 
   | ParenExpr(stmt_info, stmt_list, _) 
-  | ReturnStmt  (stmt_info, stmt_list) 
   | ImplicitCastExpr (stmt_info, stmt_list, _, _, _) 
   | CStyleCastExpr (stmt_info, stmt_list, _, _, _) 
   | CompoundStmt (stmt_info, stmt_list) -> 
@@ -705,7 +728,21 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
     sequentialComposingListStmt stmts fp 
 
-  
+  | ReturnStmt  (stmt_info, stmt_list) -> 
+    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let terms = List.map stmt_list ~f:(fun a -> stmt2Term a) in 
+
+    (
+    match terms with
+    | [] -> (CFunCall("return", [UNIT], fp))
+    | x :: _ -> (CFunCall("return", [x], fp))
+    | _ -> (CFunCall("return", [TList(terms)], fp))
+    )
+
+    
+    
+
+
 
 
   | CompoundAssignOperator (stmt_info, x::y::_, _, _, _) -> 
@@ -930,7 +967,7 @@ let vardecl2String (dec: Clang_ast_t.decl): term  =
     let c_type = CAst_utils.get_type qual_type.qt_type_ptr in 
         
         (match c_type with 
-          | Some (PointerType _) -> Pointer varName
+          | Some (PointerType _) -> (* Pointer *) Var varName
             
           | _ -> Var varName
 
@@ -967,7 +1004,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           debug_print ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
-          let (startingState:effect) = [([], TRUE, Emp, fc_default, Var "_" )] in
+          let (startingState:effect) = [([], TRUE, Emp, fc_default, Var "_" , 0 )] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
@@ -976,11 +1013,11 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
           
-          debug_postprocess("raw_final = " ^ string_of_effect raw_final);
+          debug_print("\nraw_final = " ^ string_of_effect raw_final);
 
           let (final:effect) = normalise_effect ((postProcess parameters raw_final)) in
 
-          debug_postprocess("final     = " ^ string_of_effect final);
+          debug_print("\nfinal     = " ^ string_of_effect final);
           
 
           let (summary:summary) =  signature, TRUE, raw_final in 

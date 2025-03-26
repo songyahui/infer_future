@@ -15,26 +15,15 @@ int main() {
   q = foo(&p); 
   free(q); 
   //Issue 4: double free
-  if (p.flag) free(p.f); 
+  //if (p.flag) 
+  free(p.f); 
   return 0; 
 }
 
-int test(void *q) {
+int test(void* q) {
   q = malloc(1);
   return 1; 
 }
 
-
-int test2(int* q) {
-  *q = 1; 
-  *q = 2; 
-}
-
-
-int test3(int q) 
-// req true, ens ret = 0
-{
-  q = 1;
-}
 
 //./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'
