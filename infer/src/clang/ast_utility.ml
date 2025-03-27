@@ -921,18 +921,28 @@ let rec getAllTermsFromPure (p:pure) : term list =
   ;;
     
 
-let rec findATermEquleToX (p:pure) (x:string) : string list = 
+let rec findATermEquleToX (p:pure) (x:string) : term list = 
   match p with
   | Eq (Var a, Var b) -> 
     if String.compare a b == 0 then [] 
     else 
-      if String.compare a x == 0 then [b]
-      else if String.compare b x == 0 then [a]
+      if String.compare a x == 0 then [Var b]
+      else if String.compare b x == 0 then [Var a]
       else []
+  | Eq (Var a, b) 
+  | Eq (b, Var a) -> 
+    (match b with 
+    | ANY -> [] 
+    | _ -> 
+      if strict_compare_Term (Var a) b then [] 
+      else if String.compare a x == 0 then [b]
+      else []
+    )
+    
   | PureAnd (p1, p2) -> findATermEquleToX p1 x @ findATermEquleToX p2 x
   | _ -> []
 
-let rec findReplacebleVar exs p : (string * string) option = 
+let rec findReplacebleVar exs p : (string * term) option = 
   match exs with 
   | [] -> None 
   | x :: xs -> 
@@ -958,10 +968,10 @@ let rec removeIntermediateRes exs tobereplacedList =
 let rec removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) : singleEffect = 
   match findReplacebleVar exs p with 
   | None -> (exs, p, re, fc, r, exitCode)
-  | Some (tobereplaced, ex) -> 
-    debug_postprocess ("\n========\nex: " ^ ex);
+  | Some (tobereplaced, (ex:term)) -> 
+    debug_postprocess ("\n========\nex: " ^ string_of_term ex);
     debug_postprocess ("tobereplacedList: " ^ tobereplaced );
-    let mappings =  [(Var ex, Var tobereplaced)] in  
+    let mappings =  [(ex, Var tobereplaced)] in  
     let exs' = removeIntermediateRes exs [tobereplaced] in 
     let temp = (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings, exitCode)  in 
 
@@ -974,7 +984,6 @@ let rec removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) : singleEffec
 
 let removeIntermediateRes  ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect =
 
-  
   let (a, b, c, d, r, ec) = removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) in
 
   (a, b, c, d, r, ec) 

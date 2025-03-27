@@ -1042,7 +1042,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
                 if f == errorCode_return then [(a, b, c, d, e, 0)] (* reset the ones for return *)
                 else  [(a, b, c, d, e, f)]               
               in 
-              acc@ extra  )
+              acc@ extra)
             ~init:[] final in 
           
 
