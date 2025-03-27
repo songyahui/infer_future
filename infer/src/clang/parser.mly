@@ -130,7 +130,7 @@ errCode:
 | {0}
 | SEMI i = INTE {i}
 
-singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=VAR ec=errCode RPAR {(strs, p, es, fc, Var r, ec)}
+singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=term ec=errCode RPAR {(strs, p, es, fc, r, ec)}
 
 effect:
 | s = singleEffect {[s]}
