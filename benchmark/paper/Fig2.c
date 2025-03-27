@@ -14,8 +14,8 @@ void open_and_write(const char* path)
     void* buf;  
     int fd = open(path, O_RDONLY); 
     if (fd==-1) exit(-1); 
-    ssize_t bytes1 = write(fd, buf, 1); 
-
+    ssize_t bytes1 = read(fd, buf, 1); 
+    ssize_t bytes2 = write(fd, buf, 1); 
     close(fd);
     return; 
 }
@@ -25,8 +25,8 @@ void open_and_read(const char* path)
     void* buf;  
     int fd = open(path, O_WRONLY); 
     if (fd==-1) exit(-1); 
-    ssize_t bytes2 = read(fd, buf, 1); 
-
+    ssize_t bytes1 = read(fd, buf, 1); 
+    ssize_t bytes2 = write(fd, buf, 1); 
     close(fd);
     return; 
 }

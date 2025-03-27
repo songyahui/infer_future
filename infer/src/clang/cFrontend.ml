@@ -480,12 +480,28 @@ let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect =
 
 let string2TermLi li = (List.map ~f:(fun a -> Var a) li) 
 
-let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)) (newr:string): singleEffect = 
+let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)): singleEffect = 
   let (exs, p, es, fc, ret, errorCode) = spec in 
   let (newexs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) exs in 
   let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2TermLi newexs) (string2TermLi exs) in 
+  let (substitute_foramlArgs_and_exs:singleEffect) = substitute_single_effect (newexs, p, es, fc, ret, errorCode) (mappings@ exs_mappsing) in 
 
-  substitute_single_effect (newexs, p, es, fc, ret, errorCode) (mappings@ exs_mappsing @[(Var newr, ret)])
+  let (_, _, _, _, ret', _) = substitute_foramlArgs_and_exs in 
+
+  match ret' with 
+  | Var _ ->  (* if the callee return a var than fet a fresh variable *)
+    let newr = verifier_get_A_freeVar ret' in 
+    let (exs'', p'', es'', fc'', ret'', errorCode'') = (substitute_single_effect substitute_foramlArgs_and_exs [(Var newr, ret)]) in 
+    (exs''@[newr], p'', es'', fc'', ret'', errorCode'')
+
+    (* if not, no need to change it *)
+  | _ -> substitute_foramlArgs_and_exs
+
+
+
+
+  
+
 
 
 
@@ -541,7 +557,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
     let effect1', extensionR = 
       (* check if v has occurred before or not *)
-      let allTerms_fromPure = getAllTermsFromPure p in 
+        let allTerms_fromPure = getAllTermsFromPure p in 
         if existAux (fun t1 t2 -> strict_compare_Term t1 t2 ) allTerms_fromPure v 
         then (* if yes, then rename it to r *)
           let r = verifier_get_A_freeVar v in 
@@ -573,7 +589,6 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
 
       let (_, foramlArgs), preC, postSummary = summary in 
-      let r = verifier_get_A_freeVar UNIT in 
 
       let mappings = (actual_formal_mappings xs foramlArgs)  in 
 
@@ -589,11 +604,11 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
         
         (* substitute the formal arguments and rename all the existential variables  *) 
         let substitutedPostSummary = List.fold_left 
-          ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings r]) ~init:[] postSummary  in 
+          ~f:(fun acc spec -> acc@ [substitute_single_effect_renaming spec mappings]) ~init:[] postSummary  in 
         debug_printCFunCall ("substitutedSummary : " ^ string_of_effect substitutedPostSummary); 
 
         (* Compose post condition *) 
-        let composeStates =  add_exs ([r]) (compose_effects state substitutedPostSummary fp) in 
+        let composeStates = (compose_effects state substitutedPostSummary fp) in 
         debug_printCFunCall ("composeStates : " ^ string_of_effect composeStates); 
 
         composeStates
