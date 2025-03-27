@@ -54,3 +54,8 @@
 /*@ end_doc() =
     REQ  TRUE
     ENS ( : TRUE ; end_doc();  (_)^* ; unit) @*/
+
+/*@ current_memory_use() =
+    REQ  TRUE
+    ENS (r1 r2 : r2>=r1 ; CMU(r1);  ((_)^* · CMU(r2) ·  (_)^*) \/ (!CMU(_))^* ; r1) @*/
+
