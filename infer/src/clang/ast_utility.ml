@@ -955,7 +955,7 @@ let rec removeIntermediateRes exs tobereplacedList =
 
 
 
-let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r, exitCode) : singleEffect = 
+let rec removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) : singleEffect = 
   match findReplacebleVar exs p with 
   | None -> (exs, p, re, fc, r, exitCode)
   | Some (tobereplaced, ex) -> 
@@ -967,25 +967,37 @@ let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r, exitCode) : s
 
     debug_postprocess ("temp: " ^ string_of_effect [temp]);
 
-    removeIntermediateResHelper formalArgs temp
+    removeIntermediateResHelper  temp
 
   ;;
 
 
-let removeIntermediateRes formalArgs ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect =
+let removeIntermediateRes  ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect =
 
-  let (a, b, c, d, r, ec) = removeIntermediateResHelper formalArgs (exs, p, re, fc, r, exitCode) in
-  (a, b, c, d, r, ec)
-;; 
   
-let postProcess (formalArgs: term list ) (eff:effect) : effect = 
+  let (a, b, c, d, r, ec) = removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) in
+
+  (a, b, c, d, r, ec) 
+;; 
+
+let removeUnusedExs ((a, b, c, d, r, ec):singleEffect) : singleEffect =
+
+  let allTerms = getAllTermsFromPure b @ getAllTermsFromRE c @ getAllTermsFromFC d @ [r] in 
+  
+  let a' = List.filter ~f:(fun ex -> existAux strict_compare_Term allTerms (Var ex)) a in 
+
+  (a', b, c, d, r, ec)
+
+  
+let postProcess  (eff:effect) : effect = 
 
   let rec helper (eff:effect) : effect = 
     match eff with 
     | [] -> []
     | single :: xs -> 
-      removeIntermediateRes formalArgs single :: helper xs
+      removeUnusedExs (removeIntermediateRes  single) :: helper xs
 
   in 
   helper eff
+  
 

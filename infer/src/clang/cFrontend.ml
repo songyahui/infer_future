@@ -1033,7 +1033,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
           debug_print("\nraw_final = " ^ string_of_effect raw_final);
 
-          let (final:effect) = normalise_effect ((postProcess parameters raw_final)) in
+          let (final:effect) = normalise_effect ((postProcess raw_final)) in
           debug_print("\nfinal     = " ^ string_of_effect final);
 
           let resetErrorCode = List.fold_left ~f:(
