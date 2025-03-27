@@ -1,5 +1,14 @@
 #include <stdlib.h>
 
+/*@ free(ptr)  = 
+    REQ  TRUE
+    ENS (r : r=unit ; free(ptr) ; (!_(ptr))^* ; r) @*/
+
+/*@ malloc(size) = 
+    REQ size > 0 
+    ENS (loc : TRUE ; malloc(loc)  ; (!free(loc))^* · free(loc) ·  (_)^* ; loc)  @*/
+
+
 struct st {int flag; void *f;};
 
 void *foo(struct st *p){

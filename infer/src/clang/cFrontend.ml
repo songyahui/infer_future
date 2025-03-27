@@ -9,6 +9,7 @@ open! IStd
 open Ast_utility
 open Sys
 module L = Logging
+open Format
 
 (* ocamlc gets confused by [module rec]: https://caml.inria.fr/mantis/view.php?id=6714 *)
 (* it also ignores the warning suppression at toplevel, hence the [include struct ... end] trick *)
@@ -1170,8 +1171,6 @@ let retriveSpecifications (source:string) : (Ast_utility.summary list * int * in
   
   try
     let ic = open_in source in
-    
-
     let lines =  (input_lines ic ) in
     let rec helper (li:string list) = 
       match li with 
@@ -1206,7 +1205,7 @@ let retriveSpecifications (source:string) : (Ast_utility.summary list * int * in
       *)
 
       close_in ic ;                 (* 关闭输入通道 *)
-      ([], line_of_spec, List.length partitions)
+      (user_sepcifications, line_of_spec, List.length partitions)
 
       (*
             flush stdin;                (* 现在写入默认设备 *)
@@ -1219,6 +1218,44 @@ let retriveSpecifications (source:string) : (Ast_utility.summary list * int * in
 
    ;;
 
+let max_syh a b = if a > b then a else b
+
+let rec map2 f l1 l2 =
+  match l1, l2 with
+  | [], [] -> []
+  | h1::t1, h2::t2 -> (f h1 h2) :: map2 f t1 t2
+  | _, _ -> []
+
+let rec iter2 f l1 l2 =
+  match l1, l2 with
+  | [], [] -> ()
+  | h1::t1, h2::t2 -> f h1 h2; iter2 f t1 t2
+  | _, _ -> ()
+
+let print_table ~headers (rows:string list list) =
+  (* Calculate maximum column widths *)
+  let (col_widths:int list) = 
+    List.fold_left ~f:(fun (acc:int list) (row:string list) -> 
+      map2 (fun w s -> max_syh w (String.length s)) acc row 
+    ) ~init:(List.map ~f:String.length headers) rows in
+  
+  let print_separator () =
+    printf "+";
+    List.iter ~f:(fun w -> printf "%s+" (String.make (w + 2) '-')) col_widths;
+    printf "@."
+  in
+  
+  let print_row row =
+    printf "|";
+    iter2 (fun w cell -> printf " %-*s |" w cell) col_widths row;
+    printf "@."
+  in
+  
+  print_separator ();
+  print_row headers;
+  print_separator ();
+  List.iter ~f:print_row rows;
+  print_separator ()
 
 
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
@@ -1228,8 +1265,8 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   CType_decl.add_predefined_types tenv ;
   init_global_state_capture () ;
   let source_file = SourceFile.to_string  (translation_unit_context.CFrontend_config.source_file) in
-  let cfg = compute_icfg translation_unit_context tenv ast in
-  (*let integer_type_widths = translation_unit_context.CFrontend_config.integer_type_widths in
+  (* let cfg = compute_icfg translation_unit_context tenv ast in
+  let integer_type_widths = translation_unit_context.CFrontend_config.integer_type_widths in
   L.(debug Capture Verbose)
     "@\n Start building call/cfg graph for '%a'....@\n" SourceFile.pp source_file ;
   *)
@@ -1241,8 +1278,9 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
 
   let path = Sys.getcwd () in
-  let (user_sepcifications, lines_of_spec, number_of_protocol) = retriveSpecifications (path ^ "/spec.c") in 
+  let (_, lines_of_spec_macro, number_of_protocol_macro) = retriveSpecifications (path ^ "/spec.c") in 
   
+  let (_, lines_of_spec_local, number_of_protocol_local) = retriveSpecifications (source_file) in 
 
   let start = Unix.gettimeofday () in 
   let _ = List.iter decl_list  
@@ -1253,12 +1291,18 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
     source_Address ^ ","
   ^ string_of_int (lines_of_code + 1 ) ^ "," (*  lines of code;  *) 
   ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
-  
   in 
 
-  print_endline ("\n=====\nNum of summaries: " ^ string_of_int ( List.length !summaries)  ^"\n"); 
+  List.iter ~f:(fun a -> debug_print (string_of_summary a)) !summaries; 
 
-  List.iter ~f:(fun a -> print_endline (string_of_summary a)) !summaries; 
+  print_table ~headers:["Summary"; ""]
+  [
+    ["No. Premitive Spec"; string_of_int (number_of_protocol_macro + number_of_protocol_local)];
+    ["No. Inferred Spec"; string_of_int (List.length !summaries - (number_of_protocol_macro + number_of_protocol_local))];
+    ["Lines of Spec"; string_of_int (lines_of_spec_macro + lines_of_spec_local)];
+    ["Lines of Code"; string_of_int (lines_of_code + 1 - lines_of_spec_local )];
+    ["Analysis Time"; string_of_float (analysisTime) ^ "s"];
+  ];
 
   let () = finalReport := !finalReport ^ msg ^ !errormessage in 
   let dirName = "/infer-term" in 
