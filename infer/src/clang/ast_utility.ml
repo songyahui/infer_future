@@ -238,7 +238,7 @@ let rec string_of_list_terms tL: string =
 
 let rec string_of_pure (p:pure):string =   
   match p with
-    TRUE -> "⊤"
+    TRUE -> "TRUE"  (*"⊤"*)
   | FALSE -> "⊥"
   | Gt (t1, t2) -> (string_of_term t1) ^ ">" ^ (string_of_term t2)
   | Lt (t1, t2) -> (string_of_term t1) ^ "<" ^ (string_of_term t2)
@@ -716,7 +716,12 @@ let rec normalise_effect (summary:effect)  : effect =
 let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
 
 let string_of_single_effect (exs, p, re, fc, r, exitCode) = 
-  "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r  ^ (if exitCode < 0 then string_of_int exitCode  else "" )
+  (if List.length exs == 0 then ":" else "∃" ^  string_of_exs exs ^  ": ") ^ 
+  string_of_pure p ^ " ; " ^ 
+  string_of_regularExpr re ^ " ; " ^ 
+  string_of_fc fc   ^ " ; " ^ 
+  string_of_term r  ^  
+  (if exitCode < 0 then " ; " ^ string_of_int exitCode  else "" )
 
 
 let rec string_of_effect (summary:effect) = 
@@ -744,7 +749,7 @@ let rec reverse li =
   | x :: xs  -> reverse(xs) @ [x]
 
 let string_of_summary ((signature, preC, disjRE):summary) = 
-  "/*@ " ^ string_of_signature signature ^ " = \n" ^ "REQ:" ^ string_of_pure preC ^ "\nENS:" ^string_of_effect disjRE ^ " @*/\n"
+  "/*@ " ^ string_of_signature signature ^ " = \n" ^ "REQ " ^ string_of_pure preC ^ "\nENS " ^string_of_effect disjRE ^ " @*/\n"
 
 let rec string_of_summaries li = 
   match li with 

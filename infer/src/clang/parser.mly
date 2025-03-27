@@ -4,7 +4,7 @@
 (*%token <string> EVENT*)
 %token <string> VAR
 %token <int> INTE
-%token EMPTY LPAR RPAR CONCAT  POWER  DISJ  PureConj UNIT Exists
+%token EMPTY LPAR RPAR CONCAT  POWER  DISJ  PureConj UNIT EXIST
 %token COLON  REQUIRE ENSURE FUTURESpec LSPEC RSPEC NULL SEMI
 %token UNDERLINE KLEENE EOF BOTTOM NOTSINGLE RETURN
 %token GT LT EQ GTEQ LTEQ CONJ COMMA MINUS 
@@ -42,6 +42,8 @@
 %type <(Ast_utility.term list)> list_of_formalArgs
 %type <(Ast_utility.term list)> list_of_terms
 %type <(string list)> list_of_exs
+%type <(string list)> exs
+
 %type <(Ast_utility.event)>  not_event
 %type <(int)> errCode
 
@@ -120,7 +122,7 @@ pure:
 | a = term EQ b = term {Eq (a, b)}
 | a = pure PureConj b = pure {PureAnd (a, b)}
 | a = pure DISJ b = pure {PureOr (a, b)}
-| Exists strs= list_of_exs CONCAT a = pure {Exists ( strs, a)}
+| EXIST strs= list_of_exs CONCAT a = pure {Exists ( strs, a)}
 
 futureCond: 
 | s = es {[s]}
@@ -130,7 +132,11 @@ errCode:
 | {0}
 | SEMI i = INTE {i}
 
-singleEffect: LPAR strs= list_of_exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=term ec=errCode RPAR {(strs, p, es, fc, r, ec)}
+exs:
+| EXIST strs= list_of_exs {strs} 
+| {[]}
+
+singleEffect: LPAR strs = exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=term ec=errCode RPAR {(strs, p, es, fc, r, ec)}
 
 effect:
 | s = singleEffect {[s]}
@@ -142,110 +148,3 @@ summary:
 
 
 
-
-(*
-parm:
-| LPAR RPAR {[]}
-| LPAR argument= basic_type RPAR {[argument]}
-
-
-anyEventOrAny:
-| {Any}
-| p=parm { Singleton (("_", p), None) }
-
-neGationAny:
-| UNDERLINE p=parm  { NotSingleton (("_", p))}
-| str = VAR p=parm { NotSingleton ((str, p))}
-
-
-
-ltl : 
-| str = VAR p=parm {Lable (str, p)} 
-| LPAR r = ltl RPAR { r }
-| NEXT p = ltl  {Next p}
-| LPAR p1= ltl UNTIL p2= ltl RPAR {Until (p1, p2)}
-| GLOBAL p = ltl {Global p}
-| FUTURE p = ltl {Future p}
-| LTLNOT p = ltl {NotLTL p}
-| LPAR p1= ltl IMPLY p2= ltl RPAR {Imply (p1, p2)}
-| LPAR p1= ltl LILAND p2= ltl RPAR {AndLTL (p1, p2)}  
-| LPAR p1= ltl LILOR p2= ltl RPAR {OrLTL (p1, p2)}
-
-es_or_ltl:
-| COMMA  b= es  {b}
-| COLON b = ltl {
-  let rec ltlToEs l = 
-    match l with 
-    | Lable str ->  Singleton (str, None)
-    | Next ltl -> Concatenate (Any, ltlToEs ltl)
-    | Global ltl -> Kleene (ltlToEs ltl)
-    | Future ltl -> Concatenate (Kleene Any, ltlToEs ltl)
-    | OrLTL (ltl1, ltl2) -> Disj (ltlToEs ltl1, ltlToEs ltl2)
-    | NotLTL (Lable str) ->  NotSingleton str 
-    | Imply (Lable str, ltl2) -> Disj (NotSingleton str ,  ltlToEs ltl2)
-    | Until (ltl1, ltl2) -> Concatenate(Kleene (ltlToEs ltl1), ltlToEs ltl2)
-    (*
-    | NotLTL of ltl 
-    | Imply of ltl * ltl
-    | AndLTL of ltl * ltl
-     *)
-    | _ ->  Singleton (("ltlToEs not yet", []), None)
-  in ltlToEs b 
-}
-
-effect:
-| LPAR r = effect RPAR { r }
-| a = pure  b = es_or_ltl {[(a, b)]}
-| a = effect  DISJ  b=effect  {List.append a b}
-
-
-
-optionalFuturecondition:
-| {None}
-| FUTURESpec e3 = effect {Some e3}
-
-optionalPostcondition:
-| ENSURE e2 = effect a = optionalFuturecondition {
-  (Some e2, a)
-}
-| a = optionalFuturecondition {
-  (None, a)
-}
-
-optionalPrecondition:
-| REQUIRE e1 = effect a = optionalPostcondition 
-{let (e2, e3) = a in 
-  (Some e1, e2, e3)}
-| a = optionalPostcondition 
-{let (e2, e3) = a in 
-  (None, e2, e3)}
-
-
-formalparmRest:
-| {None}
-| COMMA rest=formalparm {Some rest}
-
-formalparm:
-| {[]}
-| str = variable rest = formalparmRest {
-  match rest with 
-  | None  -> [str]
-  | Some rest -> str ::rest
-  }
-
-
-specification: 
-| EOF {(("", []), None, None, None)}
-| LSPEC str = variable LPAR argument=formalparm RPAR COLON 
-a = optionalPrecondition 
-RSPEC {
-  let (e1, e2, e3) = a in 
-  ((str, argument), e1, e2, e3)}
-
-
-specification: 
-| EOF {("", None, None, None)}
-| LSPEC str = VAR COLON 
-REQUIRE e1=effect ENSURE e2=effect FUTURESpec e3=effect
-RSPEC {  (str, Some e1, Some e2, Some e3)}
-*)

@@ -5,23 +5,23 @@
 
 /*@ start_doc() =
     REQ  TRUE
-    ENS ( : TRUE ; start_doc(); (start_page() · (!end_doc())^* · end_page() )^* · end_doc() ; unit) @*/
+    ENS (: TRUE ; start_doc(); (start_page() · (!end_doc())^* · end_page() )^* · end_doc() ; unit) @*/
 
 /*@ start_page() =
     REQ  TRUE
-    ENS ( : TRUE ; start_page(); (draw())^* · end_page() · (_)^* ; unit) @*/
+    ENS (: TRUE ; start_page(); (draw())^* · end_page() · (_)^* ; unit) @*/
 
 /*@ draw() =
     REQ  TRUE
-    ENS ( : TRUE ; draw();  (_)^* ; unit) @*/
+    ENS (: TRUE ; draw();  (_)^* ; unit) @*/
 
 /*@ end_page() =
     REQ  TRUE
-    ENS ( : TRUE ; end_page();  (_)^* ; unit) @*/
+    ENS (: TRUE ; end_page();  (_)^* ; unit) @*/
 
 /*@ end_doc() =
     REQ  TRUE
-    ENS ( : TRUE ; end_doc();  (_)^* ; unit) @*/
+    ENS (: TRUE ; end_doc();  (_)^* ; unit) @*/
 
 void start_doc(); 
 void start_page(); 

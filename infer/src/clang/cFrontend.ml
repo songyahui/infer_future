@@ -1021,13 +1021,13 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           (let (parameters: term list ) = List.map (function_decl_info.fdi_parameters) ~f:(fun a -> (vardecl2String a)) in 
           
 
-          debug_print ("annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
+          debug_print ("\n~~~~~~~~~~~~\n" ^ "annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
           let (startingState:effect) = [([], TRUE, Emp, fc_default, Var "_" , 0 )] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
-          debug_print ("=====\n" ^ string_of_core_lang core_prog ^ "\n");
+          debug_print (string_of_core_lang core_prog);
           let signature = (funcName, parameters) in 
 
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
@@ -1258,6 +1258,20 @@ let print_table ~headers (rows:string list list) =
   print_separator ()
 
 
+let partition_at i lst =
+  let (left, right, _) = 
+    List.fold_left ~f:(fun (left, right, idx) x ->
+      if idx < i then (x::left, right, idx+1)
+      else (left, x::right, idx+1)
+    ) ~init:([], [], 0) lst
+  in
+  (List.rev left, List.rev right)
+
+let rec print_out_the_inferred_specifications summaries num : unit = 
+  let (_, right) = partition_at num summaries in
+  List.iter ~f:(fun a -> debug_print (string_of_summary a))  right
+
+
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
   verifier_counter_reset_to 0; 
 
@@ -1293,7 +1307,9 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
   in 
 
-  List.iter ~f:(fun a -> debug_print (string_of_summary a)) !summaries; 
+  debug_print ("\n~~~~~~~~~~~~~~~~~~~~~~~~~~\nInferred Specifidations:"); 
+  print_out_the_inferred_specifications !summaries (number_of_protocol_macro + number_of_protocol_local); 
+
 
   print_table ~headers:["Summary"; ""]
   [

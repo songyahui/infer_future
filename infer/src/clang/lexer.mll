@@ -63,7 +63,7 @@ rule token = parse
 | '=' {EQ}
 | "/\\" {CONJ}
 | "∧" {PureConj}
-| "∃" {Exists}
+| "∃" {EXIST}
 | "\\/" {DISJ}
 | "<>" {FUTURE}  
 | "[]" {GLOBAL}
