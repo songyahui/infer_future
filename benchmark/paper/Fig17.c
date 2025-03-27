@@ -23,7 +23,6 @@
     REQ  TRUE
     ENS ( : TRUE ; end_doc();  (_)^* ; unit) @*/
 
-    
 void start_doc(); 
 void start_page(); 
 void draw();     
@@ -60,7 +59,7 @@ void testPainting1 ()
 }
 
 
-void testPainting1 () 
+void testPainting2 () 
 { 
     start_doc(); 
     start_page(); 
@@ -78,7 +77,7 @@ void testPainting1 ()
 }
 
 
-void testPainting2 () 
+void testPainting3 () 
 { 
     start_doc(); 
     start_page(); 

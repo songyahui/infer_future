@@ -147,7 +147,7 @@ let (summaries: (summary list)ref) = ref []
 let verifier_get_A_freeVar term :string  =
   let prefix =
     match term with 
-    | Var str -> str
+    | Var str -> "v"
     | _ -> "v"
   in
   let x = prefix ^ string_of_int (!verifier_counter) in
@@ -716,19 +716,17 @@ let rec normalise_effect (summary:effect)  : effect =
 let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
 
 let string_of_single_effect (exs, p, re, fc, r, exitCode) = 
-  "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r  (* ^ " ; " ^ string_of_int exitCode *) 
+  "∃" ^  string_of_exs exs ^ ". "^ string_of_pure p ^ " ; " ^ string_of_regularExpr re ^ " ; " ^ string_of_fc fc   ^ " ; " ^ string_of_term r  ^ (if exitCode < 0 then string_of_int exitCode  else "" )
 
 
 let rec string_of_effect (summary:effect) = 
 
   let string_of_a_pair (exs, p, re, fc, r, exitCode) = string_of_single_effect (exs, p, re, fc, r, exitCode) in 
-    
-    
 
   match summary with 
   | [] -> ""
-  | [x] -> string_of_a_pair x
-  | x :: xs -> string_of_a_pair x  ^ " \\/ \n" ^ string_of_effect xs 
+  | [x] -> "(" ^ string_of_a_pair x ^ ")"
+  | x :: xs -> "(" ^ string_of_a_pair x  ^ ") \\/ \n    " ^ string_of_effect xs 
 
 
 let rec flattenList lili = 
@@ -740,21 +738,13 @@ let cartesian_product li1 li2 =
     flattenList (List.map li1 ~f:(fun l1 -> 
       List.map li2 ~f:(fun l2 -> (l1, l2))))
 
-let concateSummaries s1 s2 = 
-  let mixLi = cartesian_product s1 s2 in 
-  let temp = (List.map mixLi ~f:(
-    fun ((pi1, es_x),  (pi2, es_y)) -> 
-      PureAnd(pi1, pi2), Concate (es_x, es_y) 
-  )) in 
-  temp
-
 let rec reverse li = 
   match li with 
   | [] -> [] 
   | x :: xs  -> reverse(xs) @ [x]
 
 let string_of_summary ((signature, preC, disjRE):summary) = 
-  string_of_signature signature ^ " = \n" ^ "REQ:" ^ string_of_pure preC ^ "\nENS:" ^string_of_effect disjRE ^ "\n"
+  "/*@ " ^ string_of_signature signature ^ " = \n" ^ "REQ:" ^ string_of_pure preC ^ "\nENS:" ^string_of_effect disjRE ^ " @*/\n"
 
 let rec string_of_summaries li = 
   match li with 

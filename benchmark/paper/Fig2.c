@@ -69,6 +69,7 @@ void open_and_read_and_write(const char* path)
     return; 
 }
 
+
 void open_and_write1(const char* path) {
     // Open the file in write-only mode, create it if it doesn't exist, and truncate it if it does.
     void* buf;  
@@ -90,5 +91,6 @@ void open_and_write1(const char* path) {
     // Close the file descriptor.
     close(fd);
 }
+
 
 //infer/bin/infer run -- clang -c benchmark/paper/Fig2.c

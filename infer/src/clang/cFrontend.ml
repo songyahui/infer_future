@@ -472,11 +472,11 @@ let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect =
       else 
         let (exs', p', re', fc', ret', ec2) = x in 
         let fc_subtracted = normalise_fc (trace_subtraction p p' (removeAny fc) re' fp) in 
-        let errorCode = match fc_subtracted with 
-        | [Bot] -> errorCode_exit
-        | _ -> ec2
+        let retFinal, errorCode = match fc_subtracted with 
+        | [Bot] -> Var "_", errorCode_exit
+        | _ -> ret', ec2
         in 
-        (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', ret', errorCode) :: compose_effects eff xs fp 
+        (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', retFinal, errorCode) :: compose_effects eff xs fp 
 
 
 let string2TermLi li = (List.map ~f:(fun a -> Var a) li) 
@@ -1031,6 +1031,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           let signature = (funcName, parameters) in 
 
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
+          
           debug_print("\nraw_final = " ^ string_of_effect raw_final);
 
           let (final:effect) = normalise_effect ((postProcess raw_final)) in
