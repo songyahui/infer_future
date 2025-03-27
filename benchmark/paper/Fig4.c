@@ -39,4 +39,11 @@ int test(void* q) {
   return 1; 
 }
 
+int test1() {
+  void* q = malloc(1);
+  return 1; 
+}
+
 //./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'
+
+// jit

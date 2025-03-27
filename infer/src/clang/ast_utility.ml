@@ -35,6 +35,12 @@ let debug_postprocess str =
     else ()
   
 
+let debug_checkPostConditionError str = 
+    if true  then debug_print (str)
+    else ()
+  
+
+    
 
 let errormessage = ref ""
 let errormessagecounter = ref 0
@@ -142,7 +148,7 @@ type summary = signature * precondition * effect
 
 let (summaries: (summary list)ref) = ref []
 
-
+let defultSingelEff = ([], TRUE, Emp, fc_default, Var "_" , 0 )
 
 let verifier_get_A_freeVar term :string  =
   let prefix =
@@ -721,7 +727,8 @@ let string_of_single_effect (exs, p, re, fc, r, exitCode) =
   string_of_regularExpr re ^ " ; " ^ 
   string_of_fc fc   ^ " ; " ^ 
   string_of_term r  ^  
-  (if exitCode < 0 then " ; " ^ string_of_int exitCode  else "" )
+  (if exitCode < 0 then " ERROR PATH! "  else "" )
+  (* ^ string_of_int exitCode  *)
 
 
 let rec string_of_effect (summary:effect) = 
@@ -899,7 +906,7 @@ let rec getAllTermsFromRE re : term list =
   | Kleene reIn  -> getAllTermsFromRE reIn  
   | Emp | Bot  -> [] 
 
-let getAllTermsFromFC fc : term list =
+let getAllTermsFromFC (fc:futureCond) : term list =
   List.fold_left ~f:(fun acc re -> acc @ getAllTermsFromRE re) ~init:[] fc
 
 let rec getAllTermsFromPure (p:pure) : term list =
@@ -978,30 +985,81 @@ let rec removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) : singleEffec
 
 
 let removeIntermediateRes  ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect =
-
   let (a, b, c, d, r, ec) = removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) in
-
   (a, b, c, d, r, ec) 
 ;; 
 
 let removeUnusedExs ((a, b, c, d, r, ec):singleEffect) : singleEffect =
 
   let allTerms = getAllTermsFromPure b @ getAllTermsFromRE c @ getAllTermsFromFC d @ [r] in 
-  
   let a' = List.filter ~f:(fun ex -> existAux strict_compare_Term allTerms (Var ex)) a in 
-
   (a', b, c, d, r, ec)
 
   
 let postProcess  (eff:effect) : effect = 
-
   let rec helper (eff:effect) : effect = 
     match eff with 
     | [] -> []
     | single :: xs -> 
       removeUnusedExs (removeIntermediateRes  single) :: helper xs
-
   in 
   helper eff
-  
 
+let remove_duplicates f lst =
+  let rec aux seen = function
+    | [] -> List.rev seen
+    | hd::tl ->
+      if List.exists ~f:(fun x -> f x hd) seen then aux seen tl
+      else aux (hd::seen) tl
+  in
+  aux [] lst
+
+let rec existTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
+  match fc_Vars with 
+  | [] -> false 
+  | x :: xs  -> if existAux strict_compare_Term forallVar x then true else existTermInForall xs forallVar
+
+let rec notExistTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
+  match fc_Vars with 
+  | [] -> false 
+  | x :: xs  -> if existAux strict_compare_Term forallVar x  == false then true else notExistTermInForall xs forallVar
+
+
+let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCond * futureCond) = 
+  List.fold_left ~f:(fun (fcInputOutput, fcExists) fcCurrent -> 
+    let fc_Vars = remove_duplicates strict_compare_Term (getAllTermsFromFC [fcCurrent]) in 
+    match fc_Vars with 
+    | [] -> (fcInputOutput@[fcCurrent], fcExists)
+    | fc_Vars ->  
+      let fcInputOutput' = if existTermInForall fc_Vars forallVar then fcInputOutput@[fcCurrent] else fcInputOutput in 
+      let fcExists' = if notExistTermInForall fc_Vars forallVar then fcExists@[fcCurrent] else fcExists in 
+      (fcInputOutput', fcExists')
+  ) ~init:(fc_default, fc_default) fc
+  ;;
+
+let checkPostConditionError (eff:effect) (formalArgs:term list) : effect = 
+  let aux ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect option = 
+    match fc with 
+    | [Bot] -> (* if already error, then no need to check *) Some (exs, p, re, fc, r, exitCode)
+    | _ -> 
+      let inputOutputTerms = r::formalArgs in 
+      let fcInputOutput, fcExists = decompositeFCByForallExists fc inputOutputTerms in 
+      debug_checkPostConditionError("fcForall = " ^ string_of_fc fcInputOutput);
+      debug_checkPostConditionError("fcExists = " ^ string_of_fc fcExists); 
+      (*
+      if traceInclusion Emp fcExists ... 
+      *)
+      Some (exs, p, re, fc, r, exitCode)
+  in 
+  let rec helper (acc:effect) (effSingleLi:effect) = 
+    match effSingleLi with 
+    | [] -> acc 
+    | x :: xs  -> 
+      (match aux x with 
+      | None -> helper acc xs
+      | Some effSingle -> helper (acc@[effSingle]) xs
+      )
+  in 
+  match helper [] eff with 
+  | [] -> [defultSingelEff] 
+  | eff -> eff

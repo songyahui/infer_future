@@ -1023,7 +1023,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           debug_print ("\n~~~~~~~~~~~~\n" ^ "annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
-          let (startingState:effect) = [([], TRUE, Emp, fc_default, Var "_" , 0 )] in
+          let (startingState:effect) = [defultSingelEff] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
 
@@ -1032,22 +1032,23 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
           
-          debug_print("\nraw_final = " ^ string_of_effect raw_final);
+          debug_print("\nRaw_final  = " ^ string_of_effect raw_final);
+          let (postProcess:effect) = normalise_effect ((postProcess raw_final)) in
 
-          let (final:effect) = normalise_effect ((postProcess raw_final)) in
-          debug_print("\nfinal     = " ^ string_of_effect final);
-
-          let resetErrorCode = List.fold_left ~f:(
+          debug_print("\nPostProcess= " ^ string_of_effect postProcess);
+          let resetErrorCodeEffect = List.fold_left ~f:(
             fun acc (a, b, c, d, e, f) -> 
               let extra = 
                 if f == errorCode_return then [(a, b, c, d, e, 0)] (* reset the ones for return *)
                 else  [(a, b, c, d, e, f)]               
               in 
               acc@ extra)
-            ~init:[] final in 
+            ~init:[] postProcess in 
+
+          let final  = checkPostConditionError resetErrorCodeEffect parameters in 
           
 
-          let (summary:summary) =  signature, TRUE, resetErrorCode in 
+          let (summary:summary) =  signature, TRUE, resetErrorCodeEffect in 
 
           summaries := !summaries @ [(summary)])
       
@@ -1307,19 +1308,9 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
   in 
 
-  debug_print ("\n~~~~~~~~~~~~~~~~~~~~~~~~~~\nInferred Specifidations:"); 
+  debug_print ("\n+--------------------+-----------------+\nInferred Specifidations:"); 
   print_out_the_inferred_specifications !summaries (number_of_protocol_macro + number_of_protocol_local); 
 
-
-  print_table ~headers:["Summary"; ""]
-  [
-    ["No. Premitive Spec"; string_of_int (number_of_protocol_macro + number_of_protocol_local)];
-    ["No. Inferred Spec"; string_of_int (List.length !summaries - (number_of_protocol_macro + number_of_protocol_local))];
-    ["Lines of Spec"; string_of_int (lines_of_spec_macro + lines_of_spec_local)];
-    ["Lines of Code"; string_of_int (lines_of_code + 1 - lines_of_spec_local )];
-    ["Analysis Time"; string_of_float (analysisTime) ^ "s"];
-    ["No. Violation"; string_of_int (!errormessagecounter) ];
-  ];
 
   let () = finalReport := !finalReport ^ msg ^ !errormessage in 
   let dirName = "/infer-term" in 
@@ -1338,6 +1329,18 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   else   
     (let () = finalReport := ("\nIn " ^ source_Address ^ ":\n") ^ !finalReport  in 
     outputFinalReport (!finalReport) output_detail)) ; 
+
+  print_table ~headers:["Summary"; ""]
+  [
+    ["No. Premitive Spec"; string_of_int (number_of_protocol_macro + number_of_protocol_local)];
+    ["No. Inferred Spec"; string_of_int (List.length !summaries - (number_of_protocol_macro + number_of_protocol_local))];
+    ["Lines of Spec"; string_of_int (lines_of_spec_macro + lines_of_spec_local)];
+    ["Lines of Code"; string_of_int (lines_of_code + 1 - lines_of_spec_local )];
+    ["Analysis Time"; string_of_float (analysisTime) ^ "s"];
+    ["No. Violation"; string_of_int (!errormessagecounter) ];
+    ["Report File"; path ^ dirName ^ "/detail.txt" ];
+  ];
+
   ()
 
 
