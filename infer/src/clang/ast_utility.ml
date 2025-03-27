@@ -932,15 +932,14 @@ let rec findATermEquleToX (p:pure) (x:string) : string list =
   | PureAnd (p1, p2) -> findATermEquleToX p1 x @ findATermEquleToX p2 x
   | _ -> []
 
-let rec findReplacebleVar exs p formalArgs : (string * string list) option = 
+let rec findReplacebleVar exs p : (string * string) option = 
   match exs with 
   | [] -> None 
   | x :: xs -> 
     let allTermEquleToX = findATermEquleToX p x in 
-    let allTermEquleToXNotIO = List.filter ~f:(fun a -> if existAux strict_compare_Term formalArgs (Var a) then false else true  ) allTermEquleToX in
-    (match allTermEquleToXNotIO with 
-    | [] -> findReplacebleVar xs p formalArgs 
-    | rest -> Some (x, rest)
+    (match allTermEquleToX with 
+    | [] -> findReplacebleVar xs p 
+    | y::_ -> Some (x, y)
     )
 
 ;;
@@ -957,13 +956,13 @@ let rec removeIntermediateRes exs tobereplacedList =
 
 
 let rec removeIntermediateResHelper formalArgs (exs, p, re, fc, r, exitCode) : singleEffect = 
-  match findReplacebleVar exs p formalArgs with 
+  match findReplacebleVar exs p with 
   | None -> (exs, p, re, fc, r, exitCode)
-  | Some (ex, tobereplacedList) -> 
+  | Some (tobereplaced, ex) -> 
     debug_postprocess ("\n========\nex: " ^ ex);
-    debug_postprocess ("tobereplacedList: " ^ string_of_li (fun a-> a) tobereplacedList " ");
-    let mappings = List.map ~f:(fun a -> (Var ex, Var a)) tobereplacedList in  
-    let exs' = removeIntermediateRes exs tobereplacedList in 
+    debug_postprocess ("tobereplacedList: " ^ tobereplaced );
+    let mappings =  [(Var ex, Var tobereplaced)] in  
+    let exs' = removeIntermediateRes exs [tobereplaced] in 
     let temp = (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings, exitCode)  in 
 
     debug_postprocess ("temp: " ^ string_of_effect [temp]);

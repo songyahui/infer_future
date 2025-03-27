@@ -490,20 +490,17 @@ let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)
   let (_, _, _, _, ret', _) = substitute_foramlArgs_and_exs in 
 
   match ret' with 
-  | Var _ ->  (* if the callee return a var than fet a fresh variable *)
-    let newr = verifier_get_A_freeVar ret' in 
-    let (exs'', p'', es'', fc'', ret'', errorCode'') = (substitute_single_effect substitute_foramlArgs_and_exs [(Var newr, ret)]) in 
-    (exs''@[newr], p'', es'', fc'', ret'', errorCode'')
+  | Var _ ->  (* if the callee return a var than get a fresh variable *)
+    let alltheFormalArgs = List.map ~f:(fun (a, _) -> a) mappings in 
+    if (* if teh return val is one of the formalArgs, then no need to rename *)
+      existAux strict_compare_Term alltheFormalArgs ret' then substitute_foramlArgs_and_exs
+    else 
+      let newr = verifier_get_A_freeVar ret' in 
+      let (exs'', p'', es'', fc'', ret'', errorCode'') = (substitute_single_effect substitute_foramlArgs_and_exs [(Var newr, ret')]) in 
+      (exs''@[newr], p'', es'', fc'', ret'', errorCode'')
 
     (* if not, no need to change it *)
   | _ -> substitute_foramlArgs_and_exs
-
-
-
-
-  
-
-
 
 
 let renameALLLocalVar(summary:summary) :summary = 
@@ -543,6 +540,8 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   
 
   match expr with 
+
+
   | CValue(t, fp) -> 
     let final = [(exs, p, re, fc, t, errorCode)] in 
     final 
@@ -1302,6 +1301,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
     ["Lines of Spec"; string_of_int (lines_of_spec_macro + lines_of_spec_local)];
     ["Lines of Code"; string_of_int (lines_of_code + 1 - lines_of_spec_local )];
     ["Analysis Time"; string_of_float (analysisTime) ^ "s"];
+    ["No. Violation"; string_of_int (!errormessagecounter) ];
   ];
 
   let () = finalReport := !finalReport ^ msg ^ !errormessage in 
