@@ -526,6 +526,14 @@ let rec nullable (eff:regularExpr) : bool =
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
   | Kleene _       -> true
 
+let rec nullableFC (eff:futureCond) : bool = 
+  match eff with 
+  | [] -> true   
+  | [x] -> nullable x 
+  | x :: xs ->
+    if nullable x then nullableFC xs 
+    else false 
+
 
 let rec re_fst re : firstEle list = 
   match re with 
@@ -727,7 +735,7 @@ let string_of_single_effect (exs, p, re, fc, r, exitCode) =
   string_of_regularExpr re ^ " ; " ^ 
   string_of_fc fc   ^ " ; " ^ 
   string_of_term r  ^  
-  (if exitCode < 0 then " ERROR PATH! "  else "" )
+  (if exitCode < -1 then "; ERROR PATH! "  else "" )
   (* ^ string_of_int exitCode  *)
 
 
@@ -1037,19 +1045,21 @@ let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCo
   ) ~init:(fc_default, fc_default) fc
   ;;
 
-let checkPostConditionError (eff:effect) (formalArgs:term list) : effect = 
+let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect = 
   let aux ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect option = 
     match fc with 
     | [Bot] -> (* if already error, then no need to check *) Some (exs, p, re, fc, r, exitCode)
     | _ -> 
       let inputOutputTerms = r::formalArgs in 
-      let fcInputOutput, fcExists = decompositeFCByForallExists fc inputOutputTerms in 
-      debug_checkPostConditionError("fcForall = " ^ string_of_fc fcInputOutput);
+      let fcForall, fcExists = decompositeFCByForallExists fc inputOutputTerms in 
+      debug_checkPostConditionError("fcForall = " ^ string_of_fc fcForall);
       debug_checkPostConditionError("fcExists = " ^ string_of_fc fcExists); 
-      (*
-      if traceInclusion Emp fcExists ... 
-      *)
-      Some (exs, p, re, fc, r, exitCode)
+      (if nullableFC fcExists 
+      then ()
+      else 
+        error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_fc fcExists ^ "\n  Trace subtracted = 𝝐 " ^ "\n  Pure =  " ^ string_of_pure p));  
+
+      Some (exs, p, re, fcForall, r, exitCode)
   in 
   let rec helper (acc:effect) (effSingleLi:effect) = 
     match effSingleLi with 

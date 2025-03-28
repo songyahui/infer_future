@@ -397,12 +397,19 @@ let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option =
   
   | _ -> Some (Gt ((( Var (Clang_ast_proj.get_stmt_kind_string instr))), ( Var ("null"))))
 
+
+let si_source_location_to_int (s:Clang_ast_t.source_location) = 
+  (match s.sl_line with 
+  | None -> -1
+  | Some n -> n )
+
 let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) = 
   let ((sl1, _)) = stmt_info.si_source_range in 
     (* let (lineLoc:int option) = sl1.sl_line in *)
-  (match sl1.sl_line with 
-  | None -> -1
-  | Some n -> n )
+  si_source_location_to_int sl1
+  
+
+
 
 let enforecePureSingleEffect (p:pure) (re:singleEffect) : singleEffect = 
   let (exs, a, b, c, r, errorCode) = re in 
@@ -1026,6 +1033,12 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           let (startingState:effect) = [defultSingelEff] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
+          
+          let (stmt_info , _) =  Clang_ast_proj.get_stmt_tuple stmt in 
+          let (_, s2) = stmt_info.si_source_range in 
+
+
+          let (fp:int) =si_source_location_to_int s2 in 
 
           debug_print (string_of_core_lang core_prog);
           let signature = (funcName, parameters) in 
@@ -1045,10 +1058,12 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
               acc@ extra)
             ~init:[] postProcess in 
 
-          let final  = checkPostConditionError resetErrorCodeEffect parameters in 
+
+
+          let final  = checkPostConditionError resetErrorCodeEffect parameters fp in 
           
 
-          let (summary:summary) =  signature, TRUE, resetErrorCodeEffect in 
+          let (summary:summary) =  signature, TRUE, final in 
 
           summaries := !summaries @ [(summary)])
       
