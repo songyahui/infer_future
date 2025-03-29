@@ -14,7 +14,7 @@ let verifier_counter: int ref = ref 0;;
 
 
 let debug_print str = 
-  if false then print_endline (str)
+  if true then print_endline (str)
   else ()
 
 let debug_printCFunCall str = 

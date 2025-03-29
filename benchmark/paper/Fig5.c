@@ -31,18 +31,30 @@
     ENS (: TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
 
 
-void open_and_closeN(int n, char *filePath) {
+void open_and_closeN_v1(int n, char** paths) {
   int fd[n]; // Stack-allocated array
 
   int i = 0; 
   while (i < n) {
-    fd[i] = open(filePath[i], O_RDONLY);
+    fd[i] = open(paths[i], O_RDONLY);
     i = i + 1; 
   }
 
   int j = 0 ; 
   while (j < n) {
     close(fd[j]);
+  }
+}
+
+void open_and_closeN_v2(int n, char** paths) {
+  int fd[n]; // Stack-allocated array
+
+  int i = 0; 
+  while (i < n) {
+    fd[i] = open(paths[i], O_RDONLY);
+    if (fd[i] < 0) {exit (-1);}
+    else {close(fd[i]);}
+    i = i + 1; 
   }
 }
 

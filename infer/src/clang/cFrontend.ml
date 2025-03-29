@@ -1324,8 +1324,8 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   in 
 
   report_print ("\n+--------------------+-----------------+"); 
-  report_print ("\n|        Inferred Specifications       |"); 
-  report_print ("\n+--------------------+-----------------+"); 
+  report_print ("|        Inferred Specifications       |"); 
+  report_print ("+--------------------+-----------------+"); 
   print_out_the_inferred_specifications !summaries (number_of_protocol_macro + number_of_protocol_local); 
 
 
