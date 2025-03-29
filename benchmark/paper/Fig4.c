@@ -22,6 +22,10 @@ void *foo(struct st *p) {
   return q; 
 }
 
+void *foo1(struct st *p) {
+  p->f = malloc(1);  
+}
+
 int main() {
   struct st p; 
   void *q;

@@ -1022,15 +1022,22 @@ let remove_duplicates f lst =
   in
   aux [] lst
 
+let strict_compare_Term_Forall_Exist (t1:term) (t2:term) : bool = 
+  match t1, t2 with 
+  | (Member (t1New, _), t2 ) 
+  | (t2,  Member (t1New, _) ) ->  strict_compare_Term t1New t2 
+  | _ , _ -> strict_compare_Term t1 t2 
+
+  
 let rec existTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
   match fc_Vars with 
   | [] -> false 
-  | x :: xs  -> if existAux strict_compare_Term forallVar x then true else existTermInForall xs forallVar
+  | x :: xs  -> if existAux strict_compare_Term_Forall_Exist forallVar x then true else existTermInForall xs forallVar
 
 let rec notExistTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
   match fc_Vars with 
   | [] -> false 
-  | x :: xs  -> if existAux strict_compare_Term forallVar x  == false then true else notExistTermInForall xs forallVar
+  | x :: xs  -> if existAux strict_compare_Term_Forall_Exist forallVar x  == false then true else notExistTermInForall xs forallVar
 
 
 let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCond * futureCond) = 

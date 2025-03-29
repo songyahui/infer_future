@@ -1323,7 +1323,9 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
   in 
 
-  debug_print ("\n+--------------------+-----------------+\nInferred Specifidations:"); 
+  debug_print ("\n+--------------------+-----------------+"); 
+  debug_print ("\n|        Inferred Specifications       |"); 
+  debug_print ("\n+--------------------+-----------------+"); 
   print_out_the_inferred_specifications !summaries (number_of_protocol_macro + number_of_protocol_local); 
 
 
