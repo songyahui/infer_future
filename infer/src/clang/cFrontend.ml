@@ -1285,7 +1285,7 @@ let partition_at i lst =
 
 let rec print_out_the_inferred_specifications summaries num : unit = 
   let (_, right) = partition_at num summaries in
-  List.iter ~f:(fun a -> debug_print (string_of_summary a))  right
+  List.iter ~f:(fun a -> report_print (string_of_summary a))  right
 
 
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
@@ -1323,9 +1323,9 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
   in 
 
-  debug_print ("\n+--------------------+-----------------+"); 
-  debug_print ("\n|        Inferred Specifications       |"); 
-  debug_print ("\n+--------------------+-----------------+"); 
+  report_print ("\n+--------------------+-----------------+"); 
+  report_print ("\n|        Inferred Specifications       |"); 
+  report_print ("\n+--------------------+-----------------+"); 
   print_out_the_inferred_specifications !summaries (number_of_protocol_macro + number_of_protocol_local); 
 
 

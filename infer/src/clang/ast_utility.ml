@@ -14,7 +14,7 @@ let verifier_counter: int ref = ref 0;;
 
 
 let debug_print str = 
-  if true then print_endline (str)
+  if false then print_endline (str)
   else ()
 
 let debug_printCFunCall str = 
@@ -36,7 +36,11 @@ let debug_postprocess str =
   
 
 let debug_checkPostConditionError str = 
-    if true  then debug_print (str)
+    if false  then debug_print (str)
+    else ()
+  
+let report_print str = 
+    if true  then print_endline (str)
     else ()
   
 
@@ -1028,7 +1032,7 @@ let strict_compare_Term_Forall_Exist (t1:term) (t2:term) : bool =
   | (t2,  Member (t1New, _) ) ->  strict_compare_Term t1New t2 
   | _ , _ -> strict_compare_Term t1 t2 
 
-  
+
 let rec existTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
   match fc_Vars with 
   | [] -> false 
