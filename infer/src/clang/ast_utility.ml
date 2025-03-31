@@ -1084,3 +1084,5 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
   match helper [] eff with 
   | [] -> [defultSingelEff] 
   | eff -> eff
+
+let invariantInference (eff:singleEffect) (guard:pure) (body:core_lang) : effect option = None 

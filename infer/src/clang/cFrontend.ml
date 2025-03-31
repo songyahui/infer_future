@@ -621,6 +621,16 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
         composeStates
       )
     )
+  | CWhile (guard, body, fp) -> 
+      
+      let invariant = invariantInference state guard body in  
+      (match invariant with 
+      | None -> 
+        error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
+        [(exs, p, re, fc, ret, -1)]
+      | Some effInv -> [state]
+      )
+      
   | _ -> [state]
   in 
   List.fold_left ~f:(fun acc (a :singleEffect )-> 

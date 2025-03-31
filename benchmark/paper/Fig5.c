@@ -35,28 +35,29 @@ void open_and_closeN_v1(int n, char** paths) {
   int fd[n]; // Stack-allocated array
 
   int i = 0; 
-  while (i < n) {
+  while (i < n) 
+  // invariant i <= n 
+  // forall j, 0 <= j < i ==> ex fd, fd[j]=fd, (_^*), open(fd), F close(fd) 
+  {
     fd[i] = open(paths[i], O_RDONLY);
     i = i + 1; 
   }
+  // forall j, 0 <= j < n ==> ex fd, fd[j]=fd, (_^*), open(fd), F close(fd) 
 
-  int j = 0 ; 
-  while (j < n) {
-    close(fd[j]);
+  int k = 0 ; 
+  while (k < n) 
+  // forall j, 0 <= j < i ==> TRUE, close(fd[j]), (!fd[j])^*
+  {
+    close(fd[k]);
   }
-}
-
-void open_and_closeN_v2(int n, char** paths) {
-  int fd[n]; // Stack-allocated array
-
-  int i = 0; 
-  while (i < n) {
-    fd[i] = open(paths[i], O_RDONLY);
-    if (fd[i] < 0) {exit (-1);}
-    else {close(fd[i]);}
-    i = i + 1; 
-  }
+  // forall j, 0 <= j < i ==> TRUE, (_^*), open(fd), F close(fd) 
 }
 
 
-//infer/bin/infer run -- clang -c benchmark/paper/Fig2.c
+/*
+define O_RDONLY        0x0000          /* open for reading only */
+define O_WRONLY        0x0001          /* open for writing only */
+define O_RDWR          0x0002          /* open for reading and writing */
+define O_ACCMODE       0x0003          /* mask for above modes */
+
+*/
