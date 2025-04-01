@@ -34,20 +34,86 @@ method iter_files(n: int, paths: array<string>) returns (fd: array<int>)
   assert i == 0 && fd.Length ==n && 0 < n && paths.Length >= n;
 
   while (i < n)
-  invariant i <= n 
-  invariant forall j :: 0 <= j < i ==> fd[j] > 0 || fd[j] == -1
-  //invariant forall j :: 0 <= j < i ==> fd[j] > 0  ; open(fd[j]); F close(fd[j]) 
+  // Inv(i, n) <==> i <= n ; emp ; (_)^* 
+  {
+    i := i + 1; 
+  }
+  // i == 0 && fd.Length ==n && 0 < n && paths.Length >= n <: 0 <= n ; emp ; (_)^* 
+  // i < n ; emp ; (_)^*   ==> i+1 <= n ; emp ; (_)^* 
+  // i == n ; emp ; (_)^*  
+
+
+  i:= 0;
+  while (i < n)
   {
     fd[i] := open(paths[i], 0); // readonly
     i := i + 1; 
   }
-  // forall j :: 0 <= j < n && fd[j] > 0 ==> open(fd[j]) ; F(close(fd[j])) 
-  // forall j :: 0 <= j < n && fd[j] == -1 ==> emp ; G(!fd[j])
 
-  //assert forall j :: 0 <= j < n ==> fd[j] > 0  ; open(fd[j]); F close(fd[j]) 
+  ex fd ; PredOpen(n, fd); PredFCOpen(n, fd);  
 
-  assert forall j :: 0 <= j < n ==> fd[j] > 0 || fd[j] == -1; 
-  assert fd.Length ==n; 
+  forall i in [0, n). 
+     i == n /\  emp    \/ 
+     i < n /\ fd[i] >= 0 /\ open (fd[i])   \/ 
+     i < n /\ fd[i] < 0 /\ emp 
+
+  forall i in [0, n). 
+     i == n /\  emp    \/ 
+     i < n /\ fd[i] >= 0 /\ F close(fd[i])   \/ 
+     i < n /\ fd[i] < 0 /\ G(!fd[i])  
+----------------------------------------------------
+  forall i in [0, n). 
+     i == n /\  emp    \/ 
+     i < n /\ fd[i] >= 0 /\ close (fd[i])   \/ 
+     i < n /\ fd[i] < 0 /\ emp 
+
+  forall i in [0, n). 
+     i == n /\  emp    \/ 
+     i < n /\ fd[i] >= 0 /\ G(!fd[i])    \/ 
+     i < n /\ fd[i] < 0 /\ _^*
+----------------------------------------------------
+  forall i in [0, n). 
+     i == n /\  emp    \/ 
+     i < n /\ fd[i] >= 0 /\ open (fd[i]).close (fd[i])   \/ 
+     i < n /\ fd[i] < 0 /\ emp 
+
+  forall i in [0, n). 
+     i == n /\  emp    \/ 
+     i < n /\ fd[i] >= 0 /\ G(!fd[i])    \/ 
+     i < n /\ fd[i] < 0 /\ G(!fd[i])
+
+
+  // 
+  i == n  &&  forall j :: 0 <= j < n ==> 
+    (fd[j] >= 0 ; open(fd[j]); F close(fd[j])) ||  fd[j] < 0  ; emp ; G(!fd[j]) 
+  
+  i == n  &&  forall j :: 0 <= j < n ==> 
+    (fd[j] >= 0 ; open(fd[j]); F close(fd[j])) ||  fd[j] < 0  ; emp ; G(!fd[j]) 
+
+Inv1(i, n, fd) == 
+  i == n ; emp ; _^* \/ 
+  i < n /\ fd[i] >= 0 ; open(fd[i]); F close(fd[i])  @ Inv1(i+1, n, fd) \/ 
+  i < n /\ fd[i] < 0 ; emp ; G(!fd[i]) @ Inv1(i+1, n, fd) \/ 
+
+Inv2(i, n, fd) == 
+  i == n ; emp ; _^* \/ 
+  i < n /\ fd[i] >= 0 ; close(fd[i]); G(!fd[i])  @ Inv2(i+1, n, fd) \/ 
+  i < n /\ fd[i] < 0 ; emp ; _^* @ Inv2(i+1, n, fd) \/ 
+
+fd[3] >= 0 ; close(fd[3]) ; 
+
+Inv1(i, n, fd) == 
+  i == n ; emp ; _^* \/ 
+  i == 3 /\ fd[i] >= 0 ; open(fd[i]). close(fd[i]); G(!fd[i])  @ Inv1(i+1, n, fd) \/ 
+  i < n /\ fd[i] >= 0 ; open(fd[i]); F close(fd[i])  @ Inv1(i+1, n, fd) \/ 
+  i < n /\ fd[i] < 0 ; emp ; G(!fd[i]) @ Inv1(i+1, n, fd) \/ 
+
+
+Inv3(i, n, fd) == 
+Inv1(i, n, fd) @ Inv2(i, n, fd) == 
+  i == n ; emp ; _^* \/ 
+  i < n /\ fd[i] >= 0 ; open(fd[i]). close(fd[i]) ; G(!fd[i]) @ Inv3(i+1, n, fd)
+  i < n /\ fd[i] < 0  ; emp ; G(!fd[i]) @ Inv3(i+1, n, fd)
 }
 
 
