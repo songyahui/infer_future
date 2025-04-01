@@ -551,13 +551,22 @@ let rec re_fst re : firstEle list =
   | Disjunction (eff1, eff2) -> (re_fst eff1) @ (re_fst eff2  )
   | Kleene re1 -> re_fst re1 
 
-let compareTermListWithPure (p:pure) (t1:term list) (t2:term list) : bool = 
-  let pairs = actual_formal_mappings t1 t2 in  
-  let (equlity:pure) = List.fold_left ~f:(fun acc (t1, t2) ->  PureAnd (acc, Eq (t1, t2))) ~init:TRUE pairs  in
+let compareTermWithPure (p:pure) (t1:term) (t2:term) : bool = 
+  let (equlity:pure) = Eq (t1, t2)  in
   if entailConstrains p equlity then true 
   else false
   ;;
 
+let compareTermListWithPure (p:pure) (t1:term list) (t2:term list) : bool = 
+  let pairs = actual_formal_mappings t1 t2 in  
+  let (equlity:pure) = List.fold_left ~f:(fun acc (t1, t2) ->  PureAnd (acc, Eq (t1, t2))) ~init:TRUE pairs  in
+  (*debug_print (string_of_pure p ^ " <: " ^ string_of_pure equlity );  *) 
+  if entailConstrains p equlity then (true )
+  else (false)
+  ;;
+
+let has_overlap compareFun list1 list2 =
+  List.exists ~f:(fun x -> existAux compareFun list2 x) list1
 
 let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
   match evTarget with 
@@ -579,11 +588,13 @@ let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr =
       else Bot  
     | _ -> Bot
     )
-  | NegTerm argsTarget -> 
+  | NegTerm (argsTarget:term list) -> 
     (match ev with
-    | Pos (str, args) -> 
-      if compareTermListWithPure p args argsTarget then Bot  
-      else Emp
+    | Pos (_, (args:term list)) -> 
+    
+      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
+      else Emp 
+
     | _ -> Bot
     )
   

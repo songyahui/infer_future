@@ -4,7 +4,7 @@
 
 /*@ open(path, flag)  = 
     REQ TRUE
-    ENS (: r=-1 ; 𝝐 ; exit(-1) · (_)^* ; r)  
+    ENS (: r=-1 ; 𝝐 ; (!_(r))^* ; r)  
      \/ (∃fd  : !(r=-1) ∧ flag=0 ; open(fd) ; (!write(fd))^* /\ (!close(fd))^* · close(fd) ·  (_)^* ; fd) 
      \/ (∃fd : !(r=-1) ∧ flag=1 ; open(fd) ; (!read(fd))^* /\ (!close(fd))^* · close(fd) ·  (_)^* ; fd) 
      \/ (∃fd : !(r=-1) ∧ flag=2 ; open(fd) ; (!close(fd))^* · close(fd) ·  (_)^* ; fd)  @*/
@@ -15,8 +15,7 @@
 
 /*@ write(fd, buf, size) =
     REQ  TRUE
-    ENS (∃r : !(r=-1) ; write(fd) ;  (_)^* ; r) 
-    \/ (∃r : r=-1 ; 𝝐 ; close(fd) · exit(-1) · (_)^* ; r)  @*/
+    ENS (∃r : TRUE ; write(fd) ; (_)^* ; r) @*/
 
 /*@ read(fd, buf, size) =
     REQ  TRUE
@@ -24,7 +23,7 @@
 
 /*@ exit(code) =
     REQ  TRUE
-    ENS (∃r : r=code ; exit(code) ; (_)^* ; r; -2 ) @*/
+    ENS (∃r : r=code ; exit() ; (_)^* ; r; -2 ) @*/
 
 /*@ return(t) =
     REQ  TRUE
