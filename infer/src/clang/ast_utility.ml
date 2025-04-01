@@ -948,20 +948,14 @@ let rec getAllTermsFromPure (p:pure) : term list =
 
 let rec findATermEquleToX (p:pure) (x:string) : term list = 
   match p with
-  | Eq (Var a, Var b) -> 
-    if String.compare a b == 0 then [] 
-    else 
-      if String.compare a x == 0 then [Var b]
-      else if String.compare b x == 0 then [Var a]
-      else []
   | Eq (Var a, b) 
   | Eq (b, Var a) -> 
     (match b with 
-    | ANY -> [] 
-    | _ -> 
+    | Member _ | Var _ -> 
       if strict_compare_Term (Var a) b then [] 
       else if String.compare a x == 0 then [b]
       else []
+    | _ -> []
     )
     
   | PureAnd (p1, p2) -> findATermEquleToX p1 x @ findATermEquleToX p2 x
@@ -1064,7 +1058,7 @@ let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCo
       let fcInputOutput' = if existTermInForall fc_Vars forallVar then fcInputOutput@[fcCurrent] else fcInputOutput in 
       let fcExists' = if notExistTermInForall fc_Vars forallVar then fcExists@[fcCurrent] else fcExists in 
       (fcInputOutput', fcExists')
-  ) ~init:(fc_default, fc_default) fc
+  ) ~init:([], []) fc
   ;;
 
 let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect = 
@@ -1081,7 +1075,8 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
       else 
         error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_fc fcExists ^ "\n  Trace subtracted = 𝝐 " ^ "\n  Pure =  " ^ string_of_pure p));  
 
-      Some (exs, p, re, fcForall, r, exitCode)
+      if List.length fcForall == 0 then None 
+      else Some (exs, p, re, fcForall, r, exitCode)
   in 
   let rec helper (acc:effect) (effSingleLi:effect) = 
     match effSingleLi with 

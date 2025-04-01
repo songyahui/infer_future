@@ -41,11 +41,16 @@ method iter_files(n: int, paths: array<string>) returns (fd: array<int>)
     fd[i] := open(paths[i], 0); // readonly
     i := i + 1; 
   }
+  // forall j :: 0 <= j < n && fd[j] > 0 ==> open(fd[j]) ; F(close(fd[j])) 
+  // forall j :: 0 <= j < n && fd[j] == -1 ==> emp ; G(!fd[j])
+
   //assert forall j :: 0 <= j < n ==> fd[j] > 0  ; open(fd[j]); F close(fd[j]) 
 
   assert forall j :: 0 <= j < n ==> fd[j] > 0 || fd[j] == -1; 
   assert fd.Length ==n; 
 }
+
+
 // Inv(i, n, paths, fd)  == 
 //     i == n ;  emp ; _^* ; () 
 //     (i < n ; open(fd[i]); F free(fd[i]);) ;  Inv(i+1, n, paths, fd)

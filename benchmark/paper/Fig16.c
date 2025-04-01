@@ -2,6 +2,10 @@
 #include <unistd.h>   
 #include <stdlib.h>   
 
+#include <fcntl.h>    
+#include <unistd.h>   
+#include <stdlib.h>   
+
 /*@ open(path, flag)  = 
     REQ TRUE
     ENS (: r=-1 ; 𝝐 ; (!_(r))^* ; r)  
@@ -23,12 +27,11 @@
 
 /*@ exit(code) =
     REQ  TRUE
-    ENS (∃r : r=code ; exit() ; (_)^* ; r; -2 ) @*/
+    ENS (: TRUE ; exit() ; (_)^* ; code; -2 ) @*/
 
 /*@ return(t) =
     REQ  TRUE
     ENS (: TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
-
 
 void open_and_closeN_v2(int n, char** paths) {
   int fd[n]; // Stack-allocated array
@@ -36,7 +39,7 @@ void open_and_closeN_v2(int n, char** paths) {
   int i = 0; 
   while (i < n) {
     fd[i] = open(paths[i], O_RDONLY);
-    if (fd[i] < 0) {exit (-1);}
+    if (fd[i] < 0) {return;}
     else {close(fd[i]);}
     i = i + 1; 
   }
