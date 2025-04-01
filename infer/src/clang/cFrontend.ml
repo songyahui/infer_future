@@ -188,7 +188,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
     
 
   | ConditionalOperator (_, x::y::_, _) -> stmt2Term y 
-  | StringLiteral (_, _, _, _)
+  | StringLiteral (_, _, _, x::_)-> ((Str x)) 
   | CharacterLiteral _ -> ((Var "char")) 
 
   | CallExpr (_, stmt_list, ei) -> 
@@ -631,6 +631,8 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       | Some effInv -> [state]
       )
       
+  | CAssumeF (fcAssert) -> 
+    [(exs, p, re, fc@fcAssert, ret, errorCode)]
   | _ -> [state]
   in 
   List.fold_left ~f:(fun acc (a :singleEffect )-> 
@@ -952,8 +954,21 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     | Some (Pos(calleeName, acturelli)) -> (* arli is the actual argument *)
       if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall calleeName then CValue (ANY, fp)
       else 
-        let prefixCmds, acturelli' = creatIntermidiateValue4execution acturelli fp in 
-        sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, acturelli', fp))]) fp
+        (if String.compare calleeName "assumeF" == 0 && List.length acturelli > 0 then 
+          (match acturelli with 
+          | (Str str) :: _ -> 
+            debug_print (str); 
+            debug_print(string_of_li string_of_term acturelli ",");
+            let fc = Parser.standaloneFC Lexer.token (Lexing.from_string str) in 
+            CAssumeF(fc)
+          | _  ->  CAssumeF(fc_default)
+          
+          )
+          
+          
+        else 
+          let prefixCmds, acturelli' = creatIntermidiateValue4execution acturelli fp in 
+          sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, acturelli', fp))]) fp)
     | _ -> 
         let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
     )

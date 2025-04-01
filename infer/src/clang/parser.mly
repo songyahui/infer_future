@@ -10,12 +10,14 @@
 %token GT LT EQ GTEQ LTEQ CONJ COMMA MINUS 
 %token PLUS TRUE FALSE 
 %token FUTURE GLOBAL IMPLY LTLNOT NEXT UNTIL LILAND LILOR
-%left DISJ 
-%left CONCAT
 
 
+%start summary 
+%start standaloneFC
 
-%start summary
+%type <(Ast_utility.futureCond)> futureCond
+%type <(Ast_utility.futureCond)> standaloneFC
+
 %type <(Ast_utility.summary)> summary
 %type <(Ast_utility.signature)> signature
 %type <(Ast_utility.effect)> effect
@@ -25,19 +27,7 @@
 %type <(Ast_utility.regularExpr)> es
 %type <(Ast_utility.event)> event
 %type <(Ast_utility.literal)> literal
-%type <(Ast_utility.futureCond)> futureCond
-(*
 
-%type <(Ast_utility.effect option * Ast_utility.effect option * Ast_utility.effect option)> optionalPrecondition
-%type <(Ast_utility.effect option * Ast_utility.effect option)> optionalPostcondition
-%type <(Ast_utility.effect option)> optionalFuturecondition
-%type <(Ast_utility.basic_type list)> parm
-%type <(Ast_utility.es)> es
-%type <(string list)> formalparm
-%type <(Ast_utility.effect)> effect
-%type <(Ast_utility.es)> es_or_ltl
-%type <(Ast_utility.ltl)> ltl
-*)
 
 %type <(Ast_utility.term list)> list_of_formalArgs
 %type <(Ast_utility.term list)> list_of_terms
@@ -127,6 +117,9 @@ pure:
 futureCond: 
 | s = es {[s]}
 | li= futureCond CONJ s = es {li@[s]}
+
+standaloneFC:
+| fc = futureCond EOF    { fc }  
 
 errCode:
 | {0}

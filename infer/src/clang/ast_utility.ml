@@ -83,6 +83,7 @@ type term =
     | RES
     | Num of int
     | Var of string
+    | Str of string
     (* | Pointer of string   *)
     | Plus of term * term 
     | Minus of term * term 
@@ -112,7 +113,7 @@ type pure = TRUE
           | PureAnd of pure * pure
           | Neg of pure
           | Exists of (string list) * pure 
-
+          | Forall of (string list) * pure 
 
 type signature = (string * (term list)) 
 
@@ -176,6 +177,7 @@ type core_lang =
   | CContinue of state 
   | CLable of string * state 
   | CGoto of string * state 
+  | CAssumeF of futureCond 
 
 let rec existAux f (li:('a list)) (ele:'a) = 
   match li with 
@@ -217,6 +219,8 @@ let rec string_of_term t : string =
   | TAnd (a, b) -> Format.asprintf "(%s&&%s)" (string_of_term a) (string_of_term b)
   | TOr (a, b) -> Format.asprintf "%s || %s" (string_of_term a) (string_of_term b)
   | Var str -> str
+  | Str str -> "\'"^ str ^ "\'"
+
   (* | Pointer str -> "*" ^ str
 *)
   | Rel (bop, t1, t2) ->
@@ -261,6 +265,7 @@ let rec string_of_pure (p:pure):string =
   | Neg (Gt (t1, t2)) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2)
   | Neg p -> "!(" ^ string_of_pure p^")"
   | Exists (str, p) -> "∃" ^ string_of_li (fun a -> a) str " "  ^ ". " ^ string_of_pure p 
+  | Forall (str, p) -> "∀" ^ string_of_li (fun a -> a) str " "  ^ ". " ^ string_of_pure p 
 
 let string_of_loc n = "@" ^ string_of_int n
 
@@ -442,6 +447,14 @@ let rec pi_to_expr ctx : pure -> Expr.expr = function
     let quantifier = Z3.Quantifier.mk_exists ctx [int_sort] xs body None [] [] None None  in 
     let quantifier_expr = Quantifier.expr_of_quantifier quantifier in
     quantifier_expr
+  | Forall (strs, p) -> 
+    let body = pi_to_expr ctx p in 
+    let int_sort = Arithmetic.Integer.mk_sort ctx in
+    let xs = List.map ~f:(fun a -> Symbol.mk_string ctx a) strs in
+    let quantifier = Z3.Quantifier.mk_forall ctx [int_sort] xs body None [] [] None None  in 
+    let quantifier_expr = Quantifier.expr_of_quantifier quantifier in
+    quantifier_expr
+
     ;;
 
 
@@ -660,7 +673,8 @@ let rec normalise_pure (pi:pure) : pure =
   | Neg piN -> Neg (normalise_pure piN)
   | PureOr (pi1,pi2) -> PureAnd (normalise_pure pi1, normalise_pure pi2)
   | Exists (str, p) -> Exists (str, normalise_pure p)
-   
+  | Forall (str, p) -> Forall (str, normalise_pure p)
+
 let rec normalise_es (eff:regularExpr) : regularExpr = 
   match eff with 
   | Disjunction(es1, es2) -> 
@@ -693,6 +707,8 @@ let rec normalise_es (eff:regularExpr) : regularExpr =
 
 let string_of_loc n = "@" ^ string_of_int n 
 
+let rec string_of_fc (fc:futureCond) : string = string_with_seperator (fun a -> "("^string_of_regularExpr a ^")") fc " /\\ "
+
 let rec string_of_core_lang (e:core_lang) :string =
   match e with
   | CValue (v, state) -> string_of_term v ^ string_of_loc state 
@@ -706,8 +722,9 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CContinue state -> "Continue" ^ string_of_loc state
   | CLable (str, state) ->  str ^ ": " ^ string_of_loc state
   | CGoto (str, state) -> "goto " ^ str ^ " " ^ string_of_loc state
+  | CAssumeF (fc) -> "AssumeF" ^ string_of_fc fc
 
-let rec string_of_fc (fc:futureCond) : string = string_with_seperator (fun a -> "("^string_of_regularExpr a ^")") fc " /\\ "
+
 
 let rec removeAny fcIn = 
   if List.length fcIn <= 1 then fcIn 

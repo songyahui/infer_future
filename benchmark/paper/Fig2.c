@@ -29,6 +29,8 @@
     REQ  TRUE
     ENS (: TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
 
+void assumeF(const char* path) ; 
+
 void test0(const char* path) 
 { 
     int fd = open(path, O_RDONLY); 
@@ -39,6 +41,16 @@ void test0(const char* path)
 int test1(const char* path) 
 { 
     int fd = open(path, O_RDONLY); 
+    return fd; 
+}
+
+int test2(const char* path) 
+{ 
+    int fd = open(path, O_RDONLY); 
+    if (fd==-1) {
+        int r = -1; 
+        assumeF("(!_(r))^*");
+        return r; }
     return fd; 
 }
 
