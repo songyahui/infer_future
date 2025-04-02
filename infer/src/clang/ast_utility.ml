@@ -31,20 +31,20 @@ let debug_printCIfELse str =
   else ()
 
 let debug_postprocess str = 
-    if true   then debug_print (str)
+    if false then debug_print (str)
     else ()
 
 let debug_Inv_Infer str = 
-    if true   then debug_print (str)
+    if true then debug_print (str)
     else ()
   
 
 let debug_checkPostConditionError str = 
-    if false  then debug_print (str)
+    if false then debug_print (str)
     else ()
   
 let report_print str = 
-    if true  then print_endline (str)
+    if true then print_endline (str)
     else ()
   
 
@@ -554,6 +554,7 @@ let rec nullable (eff:regularExpr) : bool =
   | Concate (eff1, eff2) -> nullable eff1 && nullable eff2  
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
   | Kleene _       -> true
+  | Bag _ -> false
 
 let rec nullableFC (eff:futureCond) : bool = 
   match eff with 
@@ -977,25 +978,31 @@ let rec getAllTermsFromPure (p:pure) : term list =
     
 
 let rec findATermEquleToX (p:pure) (x:string) : term list = 
-  match p with
-  | Eq (Var a, b) 
-  | Eq (b, Var a) -> 
-    (match b with 
-    | Member _ | Var _ -> 
-      if strict_compare_Term (Var a) b then [] 
-      else if String.compare a x == 0 then [b]
-      else []
+  debug_postprocess (string_of_pure p);
+  let aux (t:term) : term list =
+    match t with 
+    | Member _ | Var _ -> [t]
     | _ -> []
-    )
-    
+  in 
+  match p with
+  | Eq(t1, t2) -> 
+    if strict_compare_Term t1 t2 then []
+    else if strict_compare_Term t1 (Var x) then aux t2 
+    else if strict_compare_Term t2 (Var x) then aux t1
+    else []
   | PureAnd (p1, p2) -> findATermEquleToX p1 x @ findATermEquleToX p2 x
-  | _ -> []
+  | _ -> 
+  []
 
 let rec findReplacebleVar exs p : (string * term) option = 
   match exs with 
   | [] -> None 
   | x :: xs -> 
     let allTermEquleToX = findATermEquleToX p x in 
+    (*
+    debug_postprocess ("\nallTermEquleToX:\n" ^ x ^ "\n"^ string_of_list_terms allTermEquleToX);
+    debug_postprocess (string_of_pure p);
+    *)
     (match allTermEquleToX with 
     | [] -> findReplacebleVar xs p 
     | y::_ -> Some (x, y)
@@ -1003,38 +1010,36 @@ let rec findReplacebleVar exs p : (string * term) option =
 
 ;;
 
-let rec removeIntermediateRes exs tobereplacedList = 
+let rec removeIntermediateResHelper exs tobereplacedList = 
   match exs with
   | [] -> [] 
   | x :: xs -> 
-    if existAux (fun a b -> if String.compare a b == 0 then true else false) tobereplacedList x then removeIntermediateRes xs tobereplacedList
-    else x:: removeIntermediateRes xs tobereplacedList
+    if existAux (fun a b -> if String.compare a b == 0 then true else false) tobereplacedList x 
+    then removeIntermediateResHelper xs tobereplacedList
+    else x:: removeIntermediateResHelper xs tobereplacedList
 
 
 
 
 
-let rec removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) : singleEffect = 
+let rec removeIntermediateRes  (exs, p, re, fc, r, exitCode) : singleEffect = 
   match findReplacebleVar exs p with 
   | None -> (exs, p, re, fc, r, exitCode)
   | Some (tobereplaced, (ex:term)) -> 
     debug_postprocess ("\n========\nex: " ^ string_of_term ex);
     debug_postprocess ("tobereplacedList: " ^ tobereplaced );
     let mappings =  [(ex, Var tobereplaced)] in  
-    let exs' = removeIntermediateRes exs [tobereplaced] in 
+    let exs' = removeIntermediateResHelper exs [tobereplaced] in 
     let temp = (exs', substitute_pure p mappings, substitute_RE re mappings, substitute_FC fc mappings, substitute_term r mappings, exitCode)  in 
 
     debug_postprocess ("temp: " ^ string_of_effect [temp]);
 
-    removeIntermediateResHelper  temp
+    removeIntermediateRes   temp
 
   ;;
 
 
-let removeIntermediateRes  ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect =
-  let (a, b, c, d, r, ec) = removeIntermediateResHelper  (exs, p, re, fc, r, exitCode) in
-  (a, b, c, d, r, ec) 
-;; 
+ 
 
 let removeUnusedExs ((a, b, c, d, r, ec):singleEffect) : singleEffect =
 
@@ -1048,7 +1053,7 @@ let postProcess  (eff:effect) : effect =
     match eff with 
     | [] -> []
     | single :: xs -> 
-      removeUnusedExs (removeIntermediateRes  single) :: helper xs
+      removeUnusedExs (removeIntermediateRes single) :: helper xs
   in 
   normalise_effect (helper eff) 
 
@@ -1132,11 +1137,11 @@ let getInterval pure guard : interval option =
 
 let invariantInference (state:singleEffect) (guard:pure) (body:effect) : effect option = 
   let (_, p, _, _, _, _) = state in
+  let body = (postProcess body) in 
   
   let (interval:interval option) = getInterval p guard in 
   debug_Inv_Infer("=====invariantInference====");
-  debug_Inv_Infer (string_of_effect body ^ "\n"); 
-  debug_Inv_Infer (string_of_effect (postProcess body)); 
+  debug_Inv_Infer (string_of_effect body);  
   
   debug_Inv_Infer (match interval with | None -> "none" | Some i -> string_of_interval i); 
   None 
