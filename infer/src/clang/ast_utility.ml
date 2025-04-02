@@ -31,7 +31,11 @@ let debug_printCIfELse str =
   else ()
 
 let debug_postprocess str = 
-    if false  then debug_print (str)
+    if true   then debug_print (str)
+    else ()
+
+let debug_Inv_Infer str = 
+    if true   then debug_print (str)
     else ()
   
 
@@ -126,9 +130,8 @@ type event = | Pos of literal | Neg of literal | NegTerm of term list | ANY
 
 type firstEle = event
 
-type intervalBound = IInt of int | IVar of string
 
-type interval = (intervalBound * intervalBound)
+type interval = (term * term)
 
 type regularExpr = 
   | Bot 
@@ -233,7 +236,7 @@ let rec string_of_term t : string =
   | TPower (t1, t2) -> "(" ^string_of_term t1 ^ "^(" ^ string_of_term t2 ^ "))"
   | TTimes (t1, t2) -> "(" ^string_of_term t1 ^ "*" ^ string_of_term t2 ^ ")"
   | TDiv (t1, t2) -> "(" ^string_of_term t1 ^ "/" ^ string_of_term t2 ^ ")"
-  | Member (t1, t2) -> string_of_term t1 ^ "." ^ string_of_li string_of_term t2 "." 
+  | Member (t1, t2) -> string_of_li string_of_term (t1::t2) "." 
   | TApp (op, args) -> Format.asprintf "%s%s" op (string_of_args string_of_term args)
   | TList nLi ->
     let rec helper li =
@@ -282,13 +285,9 @@ let string_of_event (ev:event) : string =
   | ANY -> "_"
   | NegTerm args -> "!_" ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
 
-let string_of_intervalBound (b:intervalBound) : string = 
-  match b with 
-  | IInt i -> string_of_int i 
-  | IVar str -> str
 
 let string_of_interval ((i, j):interval) : string  = 
-  "[" ^ string_of_intervalBound i ^ ".." ^ string_of_intervalBound j ^ "]"
+  "[" ^ string_of_term i ^ ".." ^ string_of_term j ^ "]"
 
 let rec string_of_regularExpr re = 
   match re with 
@@ -730,7 +729,7 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CFunCall (f, xs, state) -> Format.sprintf "%s(%s)" f (List.map ~f:string_of_term xs |> String.concat ~sep:",") ^ string_of_loc state 
   | CLocal (str, state) -> Format.sprintf "local %s " str ^ string_of_loc state 
   | CSeq (e1, e2) -> Format.sprintf "%s\n%s" (string_of_core_lang e1) (string_of_core_lang e2) 
-  | CWhile (pi, e, state) -> Format.sprintf "while (%s)\n {%s}" (string_of_pure pi) (string_of_core_lang e) ^ string_of_loc state 
+  | CWhile (pi, e, state) -> Format.sprintf "while (%s)\n{%s}" (string_of_pure pi) (string_of_core_lang e) ^ string_of_loc state 
   | CBreak  state ->  "Break" ^ string_of_loc state
   | CContinue state -> "Continue" ^ string_of_loc state
   | CLable (str, state) ->  str ^ ": " ^ string_of_loc state
@@ -957,7 +956,8 @@ let rec getAllTermsFromRE re : term list =
   | Concate (eff1, eff2) 
   | Disjunction (eff1, eff2) -> getAllTermsFromRE eff1 @ getAllTermsFromRE eff2
   | Kleene reIn  -> getAllTermsFromRE reIn  
-  | Emp | Bot  -> [] 
+  | Emp | Bot  | Bag _-> [] 
+  
 
 let getAllTermsFromFC (fc:futureCond) : term list =
   List.fold_left ~f:(fun acc re -> acc @ getAllTermsFromRE re) ~init:[] fc
@@ -1050,7 +1050,7 @@ let postProcess  (eff:effect) : effect =
     | single :: xs -> 
       removeUnusedExs (removeIntermediateRes  single) :: helper xs
   in 
-  helper eff
+  normalise_effect (helper eff) 
 
 let remove_duplicates f lst =
   let rec aux seen = function
@@ -1121,4 +1121,22 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
   | [] -> [defultSingelEff] 
   | eff -> eff
 
-let invariantInference (eff:singleEffect) (guard:pure) (body:core_lang) : effect option = None 
+let getInterval pure guard : interval option = 
+  match guard with 
+  | Lt(Var i, t) -> 
+    if entailConstrains pure (Eq (Var i, Num 0)) then 
+    Some (Num 0, Minus(t, Num 1)) 
+    else None  
+  | _ -> None 
+
+
+let invariantInference (state:singleEffect) (guard:pure) (body:effect) : effect option = 
+  let (_, p, _, _, _, _) = state in
+  
+  let (interval:interval option) = getInterval p guard in 
+  debug_Inv_Infer("=====invariantInference====");
+  debug_Inv_Infer (string_of_effect body ^ "\n"); 
+  debug_Inv_Infer (string_of_effect (postProcess body)); 
+  
+  debug_Inv_Infer (match interval with | None -> "none" | Some i -> string_of_interval i); 
+  None 

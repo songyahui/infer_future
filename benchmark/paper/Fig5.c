@@ -36,7 +36,7 @@ void open_and_closeN_v1(int n, char** paths) {
   int i = 0; 
   while (i < n) 
   {
-    fd[i] = open(paths[i], O_RDONLY);
+    fd[i] = open(paths[i], O_RDWR);
     i = i + 1; 
   }
 

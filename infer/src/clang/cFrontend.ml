@@ -563,6 +563,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let effect1 = aux e state in 
 
     let effect1', extensionR = 
+      let r = verifier_get_A_freeVar v in 
+      substitute_effect effect1 [(Var r, v)], [r]
+      (*
       (* check if v has occurred before or not *)
         let allTerms_fromPure = getAllTermsFromPure p in 
         if existAux (fun t1 t2 -> strict_compare_Term t1 t2 ) allTerms_fromPure v 
@@ -570,7 +573,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
           let r = verifier_get_A_freeVar v in 
           substitute_effect effect1 [(Var r, v)], [r]
         else (* if no, just leave it and there is no fresh variable crated  *)
-          effect1, [] in 
+          effect1, [] 
+      *)
+    in 
     List.map ~f:(fun (exs, p, re, fc, ret, errorCode) -> (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT, errorCode)) effect1'
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret, errorCode)]
@@ -622,14 +627,17 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       )
     )
   | CWhile (guard, body, fp) -> 
+
+    let eff_loop_body =  (aux body defultSingelEff) in 
+
       
-      let invariant = invariantInference state guard body in  
-      (match invariant with 
-      | None -> 
-        error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
-        [(exs, p, re, fc, ret, -1)]
-      | Some effInv -> [state]
-      )
+    let invariant = invariantInference state guard eff_loop_body in  
+    (match invariant with 
+    | None -> 
+      error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
+      [(exs, p, re, fc, ret, -1)]
+    | Some effInv -> [state]
+    )
       
   | CAssumeF (fcAssert) -> 
     [(exs, p, re, fc@fcAssert, ret, errorCode)]
@@ -1071,7 +1079,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
           
           debug_print("\nRaw_final  = " ^ string_of_effect raw_final);
-          let (postProcess:effect) = normalise_effect ((postProcess raw_final)) in
+          let (postProcess:effect) = ((postProcess raw_final)) in
 
           debug_print("\nPostProcess= " ^ string_of_effect postProcess);
           let resetErrorCodeEffect = List.fold_left ~f:(
