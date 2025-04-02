@@ -158,7 +158,12 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
 
     let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
     (*print_endline (string_of_int (List.length temp)); *)
-   ((Var(string_with_seperator  (fun a -> (string_of_term a)) temp ".")))
+    (match temp with 
+    | [] -> Nil 
+    | [x] -> x 
+    | x :: xs -> Member (x, xs)
+    )
+
 
   | MemberExpr (_, arlist, _, member_expr_info)  -> 
     let memArg = member_expr_info.mei_name.ni_name in 
@@ -636,7 +641,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     | None -> 
       error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
       [(exs, p, re, fc, ret, -1)]
-    | Some effInv -> [state]
+    | Some effInv -> effInv
     )
       
   | CAssumeF (fcAssert) -> 

@@ -301,7 +301,7 @@ let rec string_of_regularExpr re =
   | Kleene effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^*"
   | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_li 
-    (fun (p, re) -> string_of_pure p ^ "/\\" ^ string_of_regularExpr re ) spec "\/"^ ")"
+    (fun (p, re) -> string_of_pure p ^ " ; " ^ string_of_regularExpr re ) spec "\/"^ ")"
 
 
 
@@ -576,6 +576,7 @@ let rec re_fst re : firstEle list =
     else temp
   | Disjunction (eff1, eff2) -> (re_fst eff1) @ (re_fst eff2  )
   | Kleene re1 -> re_fst re1 
+  | Bag _ -> []
 
 let compareTermWithPure (p:pure) (t1:term) (t2:term) : bool = 
   let (equlity:pure) = Eq (t1, t2)  in
@@ -637,6 +638,7 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
     else resRe1
   | Disjunction(re1, re2) -> Disjunction(derivative p ev re1, derivative p ev re2) 
   | Kleene reIn -> Concate (derivative p ev reIn, re)
+  | Bag _ -> re
 
 
 let rec normalise_pure (pi:pure) : pure = 
@@ -853,7 +855,7 @@ let rec substitute_term (t:term) (actual_formal_mappings:((term*term)list)): ter
   | TTimes (a, b) ->  TTimes (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
   | TDiv (a, b) ->  TDiv(substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
   | Member (a, b) -> 
-    let b' =List.map b ~f:(fun a -> substitute_term a actual_formal_mappings) in 
+    let b' = List.map b ~f:(fun c -> substitute_term c actual_formal_mappings) in 
     Member (substitute_term a actual_formal_mappings, b')
   | TApp (op, args) -> 
     let args' =List.map args ~f:(fun a -> substitute_term a actual_formal_mappings) in 
@@ -926,6 +928,14 @@ let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)
     Disjunction(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
      
   | Kleene effIn -> Kleene (substitute_RE effIn actual_formal_mappings)
+  (*
+  | Bag((b1, b2), li) -> 
+    let b1' = substitute_term b1 actual_formal_mappings in 
+    let b2' = substitute_term b2 actual_formal_mappings in 
+    let li' = List.map ~f:(fun (p, es)-> substitute_pure p actual_formal_mappings, substitute_RE es actual_formal_mappings) li  
+    in 
+    Bag((b1', b2'), li')
+    *)
   | _ -> re
 
 let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = (List.map ~f:(fun fce -> substitute_RE fce actual_formal_mappings) fc)
@@ -953,11 +963,16 @@ let getAllTermsFromEvent (ev:event) : term list =
 
 let rec getAllTermsFromRE re : term list =    
   match re with 
-  | Singleton ev  -> getAllTermsFromEvent ev
+  | Singleton ev  -> 
+    let tep = getAllTermsFromEvent ev in 
+    tep 
   | Concate (eff1, eff2) 
   | Disjunction (eff1, eff2) -> getAllTermsFromRE eff1 @ getAllTermsFromRE eff2
   | Kleene reIn  -> getAllTermsFromRE reIn  
-  | Emp | Bot  | Bag _-> [] 
+  | Bag ((b1, b2), li) -> 
+    let tLi = List.fold_left ~f:(fun acc (p, es) -> acc @ getAllTermsFromRE es) ~init:[] li in 
+    tLi
+  | Emp | Bot  -> [] 
   
 
 let getAllTermsFromFC (fc:futureCond) : term list =
@@ -1038,12 +1053,25 @@ let rec removeIntermediateRes  (exs, p, re, fc, r, exitCode) : singleEffect =
 
   ;;
 
+let strict_compare_Term_Forall_Exist (t1:term) (t2:term) : bool = 
+  match t1, t2 with 
+  | (Member (t1New, _), t2 ) 
+  | (t2,  Member (t1New, _) ) ->  strict_compare_Term t1New t2 
+  | _ , _ -> strict_compare_Term t1 t2 
 
- 
+
+let rec existTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
+  match fc_Vars with 
+  | [] -> false 
+  | x :: xs  -> if existAux strict_compare_Term_Forall_Exist forallVar x then true else existTermInForall xs forallVar
+
 
 let removeUnusedExs ((a, b, c, d, r, ec):singleEffect) : singleEffect =
 
   let allTerms = getAllTermsFromPure b @ getAllTermsFromRE c @ getAllTermsFromFC d @ [r] in 
+  let allTerms = List.map ~f:(fun t -> match t with | Member(tIn, _)-> tIn | _ -> t)  allTerms in 
+
+  debug_print (string_of_list_terms allTerms);
   let a' = List.filter ~f:(fun ex -> existAux strict_compare_Term allTerms (Var ex)) a in 
   (a', b, c, d, r, ec)
 
@@ -1066,17 +1094,6 @@ let remove_duplicates f lst =
   in
   aux [] lst
 
-let strict_compare_Term_Forall_Exist (t1:term) (t2:term) : bool = 
-  match t1, t2 with 
-  | (Member (t1New, _), t2 ) 
-  | (t2,  Member (t1New, _) ) ->  strict_compare_Term t1New t2 
-  | _ , _ -> strict_compare_Term t1 t2 
-
-
-let rec existTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
-  match fc_Vars with 
-  | [] -> false 
-  | x :: xs  -> if existAux strict_compare_Term_Forall_Exist forallVar x then true else existTermInForall xs forallVar
 
 let rec notExistTermInForall (fc_Vars:term list) (forallVar:term list) : bool = 
   match fc_Vars with 
@@ -1126,22 +1143,29 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
   | [] -> [defultSingelEff] 
   | eff -> eff
 
-let getInterval pure guard : interval option = 
+let rec removePure (p:pure) (pToRemover:pure) : pure =
+  match p with 
+  | PureAnd (p1, p2) -> PureAnd (removePure p1 pToRemover, removePure p2 pToRemover)
+  | _ -> if comparePure p pToRemover then TRUE else p 
+  
+
+let getInterval pure guard : (interval * pure) option = 
   match guard with 
   | Lt(Var i, t) -> 
     if entailConstrains pure (Eq (Var i, Num 0)) then 
-    Some (Num 0, Minus(t, Num 1)) 
+    let p' = removePure pure (Eq (Var i, Num 0)) in 
+    Some ((Num 0, Minus(t, Num 1)), PureAnd(p', Eq(Var i, t))) 
     else None  
   | _ -> None 
 
 
 let invariantInference (state:singleEffect) (guard:pure) (body:effect) : effect option = 
-  let (_, p, _, _, _, _) = state in
+  let (exs, p, re, fc, _, errorCode) = state in
   let body = (postProcess body) in 
-  
-  let (interval:interval option) = getInterval p guard in 
-  debug_Inv_Infer("=====invariantInference====");
-  debug_Inv_Infer (string_of_effect body);  
-  
-  debug_Inv_Infer (match interval with | None -> "none" | Some i -> string_of_interval i); 
-  None 
+  match getInterval p guard with 
+  | None -> None 
+  | Some (inv, p') -> 
+    let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
+    let (bagFC:((pure * regularExpr)list)) = flattenList (List.map ~f:(fun (_, p, _, fc , _, _) -> List.map ~f:(fun f -> (p, f)) fc) body) in 
+
+    Some [(exs, p', Concate(re, Bag(inv, bagtrace)), fc@[Bag(inv, bagFC)], UNIT, errorCode)]
