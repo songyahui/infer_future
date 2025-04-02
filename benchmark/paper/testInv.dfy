@@ -53,35 +53,20 @@ method iter_files(n: int, paths: array<string>) returns (fd: array<int>)
   ex fd ; PredOpen(n, fd); PredFCOpen(n, fd);  
 
   forall i in [0, n). 
-     i == n /\  emp    \/ 
-     i < n /\ fd[i] >= 0 /\ open (fd[i])   \/ 
-     i < n /\ fd[i] < 0 /\ emp 
-
-  forall i in [0, n). 
-     i == n /\  emp    \/ 
-     i < n /\ fd[i] >= 0 /\ F close(fd[i])   \/ 
-     i < n /\ fd[i] < 0 /\ G(!fd[i])  
+     i == n /\  emp  \/ 
+     i < n /\ fd[i] >= 0 ; open (fd[i]) ; F close(fd[i])  \/ 
+     i < n /\ fd[i] < 0 ; emp ; G(!fd[i])  
 ----------------------------------------------------
   forall i in [0, n). 
      i == n /\  emp    \/ 
-     i < n /\ fd[i] >= 0 /\ close (fd[i])   \/ 
-     i < n /\ fd[i] < 0 /\ emp 
-
-  forall i in [0, n). 
-     i == n /\  emp    \/ 
-     i < n /\ fd[i] >= 0 /\ G(!fd[i])    \/ 
-     i < n /\ fd[i] < 0 /\ _^*
+     i < n /\ fd[i] >= 0 ; close (fd[i]) ; G(!fd[i])     \/ 
+     i < n /\ fd[i] < 0 ; emp ; _^*
 ----------------------------------------------------
   forall i in [0, n). 
      i == n /\  emp    \/ 
-     i < n /\ fd[i] >= 0 /\ open (fd[i]).close (fd[i])   \/ 
-     i < n /\ fd[i] < 0 /\ emp 
-
-  forall i in [0, n). 
-     i == n /\  emp    \/ 
-     i < n /\ fd[i] >= 0 /\ G(!fd[i])    \/ 
-     i < n /\ fd[i] < 0 /\ G(!fd[i])
-
+     i < n /\ fd[i] >= 0 ; open (fd[i]).close (fd[i]) ; G(!fd[i])  \/ 
+     i < n /\ fd[i] < 0 /\ emp ; G(!fd[i])  
+     
 
   // 
   i == n  &&  forall j :: 0 <= j < n ==> 

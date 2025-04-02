@@ -35,25 +35,20 @@ void open_and_closeN_v1(int n, char** paths) {
 
   int i = 0; 
   while (i < n) 
-  // invariant i <= n 
-  // forall j, 0 <= j < i ==> ex fd, fd[j]=fd, (_^*), open(fd), F close(fd) 
   {
     fd[i] = open(paths[i], O_RDONLY);
     i = i + 1; 
   }
-  // forall j :: 0 <= j < n && fd[j] > 0 ==> open(fd[j]) ; F(close(fd[j])) 
-  // forall j :: 0 <= j < n && fd[j] == -1 ==> emp ; G(!fd[j])
 
+  /*
   int k = 0 ; 
   while (k < n) 
-  // forall j, 0 <= j < i ==> TRUE, close(fd[j]), (!fd[j])^*
   {
     if (fd==-1) { k = k + 1;}
     else 
       {close(fd[k]); k = k + 1;}
   }
-  // forall j :: 0 <= j < n && fd[j] == -1 ==> emp ; G(!fd[j])
-  // forall j :: 0 <= j < n && fd[j] > 0 ==> open(fd[j]) ; F(close(fd[j])) 
+  */
 
 }
 

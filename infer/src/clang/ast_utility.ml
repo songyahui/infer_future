@@ -126,6 +126,9 @@ type event = | Pos of literal | Neg of literal | NegTerm of term list | ANY
 
 type firstEle = event
 
+type intervalBound = IInt of int | IVar of string
+
+type interval = (intervalBound * intervalBound)
 
 type regularExpr = 
   | Bot 
@@ -134,7 +137,7 @@ type regularExpr =
   | Disjunction of (regularExpr * regularExpr)
   | Concate of (regularExpr * regularExpr)
   | Kleene of regularExpr 
-
+  | Bag of interval * ((pure * regularExpr) list) 
 
 
 type futureCond = regularExpr list 
@@ -279,6 +282,14 @@ let string_of_event (ev:event) : string =
   | ANY -> "_"
   | NegTerm args -> "!_" ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
 
+let string_of_intervalBound (b:intervalBound) : string = 
+  match b with 
+  | IInt i -> string_of_int i 
+  | IVar str -> str
+
+let string_of_interval ((i, j):interval) : string  = 
+  "[" ^ string_of_intervalBound i ^ ".." ^ string_of_intervalBound j ^ "]"
+
 let rec string_of_regularExpr re = 
   match re with 
   | Bot              -> "⏊"
@@ -290,6 +301,8 @@ let rec string_of_regularExpr re =
      
   | Kleene effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^*"
+  | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_li 
+    (fun (p, re) -> string_of_pure p ^ "/\\" ^ string_of_regularExpr re ) spec "\/"^ ")"
 
 
 
