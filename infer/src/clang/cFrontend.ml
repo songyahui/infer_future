@@ -562,7 +562,6 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let effect2 = forward_reasoning signature effect1 e2 in
     effect2 
 
-
   | CAssign (v, e, fp) -> 
     let effect1 = aux e state in 
 
@@ -630,11 +629,23 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
         composeStates
       )
     )
+  | CBreak _ -> [(exs, p, re, fc, ret, errorCode_break)]
   | CWhile (guard, body, fp) -> 
+    (
+    match  decreasingArgumentInference p guard body with 
+    | None -> 
+      error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
+      [(exs, p, re, fc, ret, -1)]
+    | Some (index, interval) -> 
+      debug_Inv_Infer("decreasingArgument " ^  string_of_term index );
+      debug_Inv_Infer("boundInv " ^ string_of_interval interval );
+      [state]
+    )
 
+
+    (*
+    
     let eff_loop_body =  (aux body defaultSinglesEff) in 
-
-      
     let invariant = invariantInference state guard eff_loop_body in  
     (match invariant with 
     | None -> 
@@ -642,6 +653,8 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       [(exs, p, re, fc, ret, -1)]
     | Some effInv -> effInv
     )
+    
+    *)
       
   | CAssumeF (fcAssert) -> 
     [(exs, p, re, fc@fcAssert, ret, errorCode)]

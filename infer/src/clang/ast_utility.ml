@@ -7,6 +7,9 @@ let errorCode_exit = -2
 
 let errorCode_failure = -3
 
+let errorCode_break = -4
+
+
 
 let retKeyword = "Return"
 let finalReport = (ref "")
@@ -1168,3 +1171,47 @@ let invariantInference (state:singleEffect) (guard:pure) (body:effect) : effect 
     let (bagFC:((pure * regularExpr)list)) = flattenList (List.map ~f:(fun (_, p, _, fc , _, _) -> List.map ~f:(fun f -> (p, f)) fc) body) in 
 
     Some [(exs, p', Concate(re, Bag(inv, bagtrace)), fc@[Bag(inv, bagFC)], UNIT, errorCode)]
+
+
+let rec mutableTermCoreLang (stmts:core_lang) : term list = 
+  match stmts with 
+  | CAssign (v, e, _) -> v:: mutableTermCoreLang e
+  | CIfELse (_, e1, e2, _) 
+  | CSeq (e1, e2) -> mutableTermCoreLang e1 @ mutableTermCoreLang e2 
+  | _ -> []
+
+
+(* this function returns the inferred decreasingArgument in the form of string and the loop bound invaraint *)
+let decreasingArgumentInference (pState:pure) (guard:pure) (body:core_lang) : (term * interval) option  = 
+  let rec helper (li:term list) (g:pure) : (term * interval) option = 
+    match g with 
+    | Lt(t1, t2) -> 
+      if existAux strict_compare_Term li t1 == false then None 
+      else 
+        if entailConstrains pState (Eq (t1, Num 0)) then 
+        Some (t1, (Num 0, Minus(t2, Num 1))) 
+        else None  
+    | LtEq(t1, t2) -> 
+      if existAux strict_compare_Term li t1 == false then None 
+      else 
+        if entailConstrains pState (Eq (t1, Num 0)) then 
+        Some (t1, (Num 0, t2)) 
+        else None  
+    | Gt(t1, t2) -> helper li (Lt(t2, t1)) 
+    | GtEq(t1, t2) -> helper li (LtEq(t2, t1)) 
+    | PureAnd(p1, p2) -> 
+      (match helper li p1  with 
+      | None -> helper li p2
+      | Some res -> Some res
+      )
+    | _ -> None 
+  in 
+
+  let mutableTerms = mutableTermCoreLang body in 
+  debug_Inv_Infer ("mutableTerms : " ^ string_of_list_terms mutableTerms);
+  
+  match mutableTerms with 
+  | [] -> None 
+  | li -> helper li guard
+  
+  
