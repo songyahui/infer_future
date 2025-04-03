@@ -637,10 +637,23 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
       [(exs, p, re, fc, ret, -1)]
     | Some (index, interval) -> 
-      debug_Inv_Infer("decreasingArgument " ^  string_of_term index );
-      debug_Inv_Infer("boundInv " ^ string_of_interval interval );
-      [state]
+      let (low, high) = interval in 
+      debug_Inv_Infer("decreasingArgument " ^  string_of_term index);
+      debug_Inv_Infer("boundInv " ^ string_of_interval interval);
+      let r = verifier_get_A_freeVar index in  
+      let state' = substitute_single_effect state [(Var r, index)] in 
+
+      let eff_loop_body = (aux body defaultSinglesEff) in 
+      let trace, futureCond = invariantInference index interval eff_loop_body in  
+      debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
+      debug_Inv_Infer("InvFC " ^ string_of_fc futureCond);
+      
+      enforcePure (Eq(index, high)) (add_exs [r] [state'])
+
     )
+
+
+      
 
 
     (*

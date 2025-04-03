@@ -995,7 +995,7 @@ let rec getAllTermsFromPure (p:pure) : term list =
   ;;
     
 
-let rec findATermEquleToX (p:pure) (x:string) : term list = 
+let rec findATermEqualToX (p:pure) (x:string) : term list = 
   let aux (t:term) : term list =
     match t with 
     | Member _ | Var _ -> [t]
@@ -1007,23 +1007,31 @@ let rec findATermEquleToX (p:pure) (x:string) : term list =
     else if strict_compare_Term t1 (Var x) then aux t2 
     else if strict_compare_Term t2 (Var x) then aux t1
     else []
-  | PureAnd (p1, p2) -> findATermEquleToX p1 x @ findATermEquleToX p2 x
+  | PureAnd (p1, p2) -> findATermEqualToX p1 x @ findATermEqualToX p2 x
   | _ -> 
   []
 
-let rec findReplacebleVar exs p : (string * term) option = 
+let stringHasNum str =
+  let found = ref false in
+  String.iter ~f:(fun c -> if Char.is_digit c then found := true) str;
+  !found
+
+let rec findReplaceableVar exs p : (string * term) option = 
   match exs with 
   | [] -> None 
   | x :: xs -> 
-    let allTermEquleToX = findATermEquleToX p x in 
-    (*
-    debug_postprocess ("\nallTermEquleToX:\n" ^ x ^ "\n"^ string_of_list_terms allTermEquleToX);
-    debug_postprocess (string_of_pure p);
-    *)
-    (match allTermEquleToX with 
-    | [] -> findReplacebleVar xs p 
-    | y::_ -> Some (x, y)
-    )
+
+    if stringHasNum x == false then findReplaceableVar xs p  
+    else 
+      let allTermEqualToX = findATermEqualToX p x in 
+      (*
+      debug_postprocess ("\nallTermEqualToX:\n" ^ x ^ "\n"^ string_of_list_terms allTermEqualToX);
+      debug_postprocess (string_of_pure p);
+      *)
+      (match allTermEqualToX with 
+      | [] -> findReplaceableVar xs p 
+      | y::_ -> Some (x, y)
+      )
 
 ;;
 
@@ -1040,7 +1048,7 @@ let rec removeIntermediateResHelper exs tobereplacedList =
 
 
 let rec removeIntermediateRes  (exs, p, re, fc, r, exitCode) : singleEffect = 
-  match findReplacebleVar exs p with 
+  match findReplaceableVar exs p with 
   | None -> (exs, p, re, fc, r, exitCode)
   | Some (tobereplaced, (ex:term)) -> 
     debug_postprocess ("\n========\nex: " ^ string_of_term ex);
@@ -1161,16 +1169,13 @@ let getInterval pure guard : (interval * pure) option =
   | _ -> None 
 
 
-let invariantInference (state:singleEffect) (guard:pure) (body:effect) : effect option = 
-  let (exs, p, re, fc, _, errorCode) = state in
-  let body = (postProcess body) in 
-  match getInterval p guard with 
-  | None -> None 
-  | Some (inv, p') -> 
-    let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
-    let (bagFC:((pure * regularExpr)list)) = flattenList (List.map ~f:(fun (_, p, _, fc , _, _) -> List.map ~f:(fun f -> (p, f)) fc) body) in 
+let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr * futureCond) = 
+  let (low, high) = inv in 
+  let inv' = inv in 
+  let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
+  let (bagFC:((pure * regularExpr)list)) = flattenList (List.map ~f:(fun (_, p, _, fc , _, _) -> List.map ~f:(fun f -> (p, f)) fc) body) in 
+  Bag(inv', bagtrace), [Bag(inv', bagFC)]
 
-    Some [(exs, p', Concate(re, Bag(inv, bagtrace)), fc@[Bag(inv, bagFC)], UNIT, errorCode)]
 
 
 let rec mutableTermCoreLang (stmts:core_lang) : term list = 
@@ -1189,13 +1194,13 @@ let decreasingArgumentInference (pState:pure) (guard:pure) (body:core_lang) : (t
       if existAux strict_compare_Term li t1 == false then None 
       else 
         if entailConstrains pState (Eq (t1, Num 0)) then 
-        Some (t1, (Num 0, Minus(t2, Num 1))) 
+        Some (t1, (Num 0, t2 )) 
         else None  
     | LtEq(t1, t2) -> 
       if existAux strict_compare_Term li t1 == false then None 
       else 
         if entailConstrains pState (Eq (t1, Num 0)) then 
-        Some (t1, (Num 0, t2)) 
+        Some (t1, (Num 0, Plus(t2, Num 1))) 
         else None  
     | Gt(t1, t2) -> helper li (Lt(t2, t1)) 
     | GtEq(t1, t2) -> helper li (LtEq(t2, t1)) 
