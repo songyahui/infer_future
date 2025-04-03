@@ -650,8 +650,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
       debug_Inv_Infer("InvFC " ^ string_of_fc futureCond);
       
-      enforcePure (Eq(index, high)) (add_exs [r] [state'])
 
+      let (exs', p', re', fc', ret', errorCode') = state' in 
+      [(exs'@[r], PureAnd(p',  Eq(index, high)), Concate(re', trace), fc'@futureCond, ret', errorCode')]
     )
 
 

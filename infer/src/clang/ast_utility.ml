@@ -304,7 +304,7 @@ let rec string_of_regularExpr re =
   | Kleene effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^*"
   | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_li 
-    (fun (p, re) -> string_of_pure p ^ " ; " ^ string_of_regularExpr re ) spec "\/"^ ")"
+    (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec "\/"^ ")"
 
 
 
@@ -1081,7 +1081,6 @@ let removeUnusedExs ((a, b, c, d, r, ec):singleEffect) : singleEffect =
   let allTerms = getAllTermsFromPure b @ getAllTermsFromRE c @ getAllTermsFromFC d @ [r] in 
   let allTerms = List.map ~f:(fun t -> match t with | Member(tIn, _)-> tIn | _ -> t)  allTerms in 
 
-  debug_print (string_of_list_terms allTerms);
   let a' = List.filter ~f:(fun ex -> existAux strict_compare_Term allTerms (Var ex)) a in 
   (a', b, c, d, r, ec)
 
@@ -1224,7 +1223,6 @@ let decreasingArgumentInference (pState:pure) (guard:pure) (body:core_lang) : (t
   in 
 
   let mutableTerms = mutableTermCoreLang body in 
-  debug_Inv_Infer ("mutableTerms : " ^ string_of_list_terms mutableTerms);
   
   match mutableTerms with 
   | [] -> None 
