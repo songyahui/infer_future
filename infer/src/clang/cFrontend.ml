@@ -122,7 +122,7 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
   
   | BinaryOperator (stmt_info, x::y::_, expr_info, binop_info)->
     stmt2Term_helper binop_info (stmt2Term x) (stmt2Term y) 
-  | IntegerLiteral (_, stmt_list, expr_info, integer_literal_info) ->
+  | IntegerLiteral (_, stmtLi, expr_info, integer_literal_info) ->
     let int_str = integer_literal_info.ili_value in 
 
     if String.length int_str > 18 then ((Var "SYH_BIGINT"))
@@ -154,10 +154,9 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
     )
   | NullStmt _ -> (Nil)
 
-  | ArraySubscriptExpr (_, arlist, _)  -> 
+  | ArraySubscriptExpr (_, arLi, _)  -> 
 
-    let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
-    (*print_endline (string_of_int (List.length temp)); *)
+    let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
     (match temp with 
     | [] -> Nil 
     | [x] -> x 
@@ -165,9 +164,9 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
     )
 
 
-  | MemberExpr (_, arlist, _, member_expr_info)  -> 
+  | MemberExpr (_, arLi, _, member_expr_info)  -> 
     let memArg = member_expr_info.mei_name.ni_name in 
-    let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
+    let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
 
     let name  = string_with_seperator (fun a ->(string_of_term a)) temp "." in 
     if String.compare memArg "" == 0 then ((Var(name )))
@@ -196,8 +195,8 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
   | StringLiteral (_, _, _, x::_)-> ((Str x)) 
   | CharacterLiteral _ -> ((Var "char")) 
 
-  | CallExpr (_, stmt_list, ei) -> 
-    (match stmt_list with
+  | CallExpr (_, stmtLi, ei) -> 
+    (match stmtLi with
     | [] -> assert false 
     | x :: rest -> 
     ((TApp(string_of_stmt x, List.map rest ~f:(fun a -> stmt2Term a))))  
@@ -217,11 +216,11 @@ and string_of_decl (dec :Clang_ast_t.decl) : string =
     (* clang_prt_raw 1305- int, 901 - char *)
   | _ ->  Clang_ast_proj.get_decl_kind_string dec
 
-and string_of_stmt_list (li: Clang_ast_t.stmt list) sep : string = 
+and string_of_stmtLi (li: Clang_ast_t.stmt list) sep : string = 
     match li with 
   | [] -> ""
   | [x] -> string_of_stmt x 
-  | x::xs -> string_of_stmt x ^ sep ^ string_of_stmt_list xs sep
+  | x::xs -> string_of_stmt x ^ sep ^ string_of_stmtLi xs sep
 
 and string_of_stmt (instr: Clang_ast_t.stmt) : string = 
   let rec helper_decl li sep = 
@@ -239,38 +238,38 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
   in 
 *)
   match instr with 
-  | ReturnStmt (stmt_info, stmt_list) ->
-    "ReturnStmt " ^ string_of_stmt_list stmt_list " " 
+  | ReturnStmt (stmt_info, stmtLi) ->
+    "ReturnStmt " ^ string_of_stmtLi stmtLi " " 
 
-  | ArraySubscriptExpr (_, arlist, _)  -> 
-    let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
+  | ArraySubscriptExpr (_, arLi, _)  -> 
+    let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
     (*print_endline (string_of_int (List.length temp)); *)
     string_with_seperator  (fun t -> (string_of_term t)) temp "."
 
-  | MemberExpr (_, arlist, _, member_expr_info)  -> 
+  | MemberExpr (_, arLi, _, member_expr_info)  -> 
     let memArg = member_expr_info.mei_name.ni_name in 
-    let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
+    let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
 
     let name  = string_with_seperator string_of_term temp "." in 
     if String.compare memArg "" == 0 then name 
     else name ^ "." ^ memArg
 
-  | IntegerLiteral (_, stmt_list, expr_info, integer_literal_info) ->
+  | IntegerLiteral (_, stmtLi, expr_info, integer_literal_info) ->
     (*"IntegerLiteral " ^*) integer_literal_info.ili_value
 
-  | StringLiteral (_, stmt_list, expr_info, str_list) -> 
+  | StringLiteral (_, stmtLi, expr_info, str_list) -> 
     let rec straux li = 
       match li with 
       | [] -> ""
       | x :: xs  -> x  ^ " " ^ straux xs 
-    in (* "StringLiteral " ^ string_of_int (List.length stmt_list)  ^ ": " ^ *) straux str_list
+    in (* "StringLiteral " ^ string_of_int (List.length stmtLi)  ^ ": " ^ *) straux str_list
 
 
-  | UnaryOperator (stmt_info, stmt_list, expr_info, unary_operator_info) ->
-    (*"UnaryOperator " ^*) string_of_stmt_list stmt_list " " ^ ""
+  | UnaryOperator (stmt_info, stmtLi, expr_info, unary_operator_info) ->
+    (*"UnaryOperator " ^*) string_of_stmtLi stmtLi " " ^ ""
   
-  | ImplicitCastExpr (stmt_info, stmt_list, expr_info, cast_kind, _) -> 
-    (*"ImplicitCastExpr " ^*) string_of_stmt_list stmt_list " " 
+  | ImplicitCastExpr (stmt_info, stmtLi, expr_info, cast_kind, _) -> 
+    (*"ImplicitCastExpr " ^*) string_of_stmtLi stmtLi " " 
   | DeclRefExpr (stmt_info, _, _, decl_ref_expr_info) ->
     (*"DeclRefExpr "^*)
     (match decl_ref_expr_info.drti_decl_ref with 
@@ -283,41 +282,41 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
       )
     )
 
-  | ParenExpr (stmt_info (*{Clang_ast_t.si_source_range} *), stmt_list, _) ->
+  | ParenExpr (stmt_info (*{Clang_ast_t.si_source_range} *), stmtLi, _) ->
 
-    string_of_stmt_list stmt_list " " 
+    string_of_stmtLi stmtLi " " 
 
     
-  | CStyleCastExpr (stmt_info, stmt_list, expr_info, cast_kind, _) -> 
-    string_of_stmt_list stmt_list " " ^ ""
+  | CStyleCastExpr (stmt_info, stmtLi, expr_info, cast_kind, _) -> 
+    string_of_stmtLi stmtLi " " ^ ""
 
 
-  | IfStmt (stmt_info, stmt_list, if_stmt_info) ->
+  | IfStmt (stmt_info, stmtLi, if_stmt_info) ->
 
-  "IfStmt " ^ string_of_stmt_list stmt_list "," ^ ""
+  "IfStmt " ^ string_of_stmtLi stmtLi "," ^ ""
  
-  | CompoundStmt (_, stmt_list) -> string_of_stmt_list stmt_list "; " 
+  | CompoundStmt (_, stmtLi) -> string_of_stmtLi stmtLi "; " 
 
-  | BinaryOperator (stmt_info, stmt_list, expr_info, binop_info) -> 
-   "BinaryOperator " ^ string_of_stmt_list stmt_list (" "^ Clang_ast_proj.string_of_binop_kind binop_info.boi_kind ^" ")  ^""
+  | BinaryOperator (stmt_info, stmtLi, expr_info, binop_info) -> 
+   "BinaryOperator " ^ string_of_stmtLi stmtLi (" "^ Clang_ast_proj.string_of_binop_kind binop_info.boi_kind ^" ")  ^""
 
-  | DeclStmt (stmt_info, stmt_list, decl_list) -> 
-  "DeclStmt " (*  ^ string_of_stmt_list stmt_list " " ^ "\n"^
+  | DeclStmt (stmt_info, stmtLi, decl_list) -> 
+  "DeclStmt " (*  ^ string_of_stmtLi stmtLi " " ^ "\n"^
     "/\\ "^ string_of_int stmt_info.si_pointer^ " " *)  ^ helper_decl decl_list " " ^ "" 
   
-  | CallExpr (stmt_info, stmt_list, ei) -> 
-      (match stmt_list with
+  | CallExpr (stmt_info, stmtLi, ei) -> 
+      (match stmtLi with
       | [] -> assert false 
       | x :: rest -> 
-    "CallExpr " ^ string_of_stmt x ^" (" ^  string_of_stmt_list rest ", " ^ ") "
+    "CallExpr " ^ string_of_stmt x ^" (" ^  string_of_stmtLi rest ", " ^ ") "
 )
 
-  | ForStmt (stmt_info, stmt_list) ->
-    "ForStmt " ^  string_of_stmt_list (stmt_list) " " 
+  | ForStmt (stmt_info, stmtLi) ->
+    "ForStmt " ^  string_of_stmtLi (stmtLi) " " 
 
   
-  | WhileStmt (stmt_info, stmt_list) ->
-    "WhileStmt " ^  string_of_stmt_list (stmt_list) " " 
+  | WhileStmt (stmt_info, stmtLi) ->
+    "WhileStmt " ^  string_of_stmtLi (stmtLi) " " 
 
   | RecoveryExpr (stmt_info, x::_, _) -> "RecoveryExpr " ^ string_of_stmt x
   | RecoveryExpr (stmt_info, [], _) -> "RecoveryExpr []" 
@@ -408,7 +407,7 @@ let si_source_location_to_int (s:Clang_ast_t.source_location) =
   | None -> -1
   | Some n -> n )
 
-let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) = 
+let stmt_info2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) = 
   let ((sl1, _)) = stmt_info.si_source_range in 
     (* let (lineLoc:int option) = sl1.sl_line in *)
   si_source_location_to_int sl1
@@ -416,22 +415,22 @@ let stmt_intfor2FootPrint (stmt_info:Clang_ast_t.stmt_info): (int) =
 
 
 
-let enforecePureSingleEffect (p:pure) (re:singleEffect) : singleEffect = 
+let enforcePureSingleEffect (p:pure) (re:singleEffect) : singleEffect = 
   let (exs, a, b, c, r, errorCode) = re in 
   (exs, PureAnd(a, p), b, c, r, errorCode)
   
 
-let enforecePure (p:pure) (re:effect) : effect = 
-  List.map re ~f:(fun single -> enforecePureSingleEffect  p single ) 
+let enforcePure (p:pure) (re:effect) : effect = 
+  List.map re ~f:(fun single -> enforcePureSingleEffect  p single ) 
 
 
 
-let rec findSpecifictaionSummaries (f:string) (summaries:summary list) : summary option = 
+let rec findSpecificationSummaries (f:string) (summaries:summary list) : summary option = 
   match summaries with 
   | [] -> None 
-  | ((fname, args), preC, re) :: xs  -> 
-    if String.compare fname f ==0 then Some ((fname, args), preC, re)
-    else findSpecifictaionSummaries f xs 
+  | ((fName, args), preC, re) :: xs  -> 
+    if String.compare fName f ==0 then Some ((fName, args), preC, re)
+    else findSpecificationSummaries f xs 
 
 let add_exs exs1 effect : effect = 
   List.map ~f:(fun (exs, p, re, fc, r, errorCode) -> (exs@exs1, p, re, fc, r, errorCode)) effect 
@@ -447,19 +446,19 @@ let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : r
       let derive2 = derivative p ev es in  
       let temp = trace_subtraction_single p derive1 derive2 in
       Disjunction (acc, temp)) ~init:Bot fst  in 
-    let res = normalise_es res  in 
+    let res = normalize_es res  in 
     res
     
     
 
-let trace_subtraction (lhsp:pure) (rhsp:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
+let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
   debug_printTraceSubtraction ( "======="); 
-  debug_printTraceSubtraction (string_of_pure lhsp ^ " - " ^ string_of_pure rhsp);
+  debug_printTraceSubtraction (string_of_pure lhsP ^ " - " ^ string_of_pure rhsP);
   debug_printTraceSubtraction (string_of_fc fc ^ " - " ^ string_of_regularExpr es);
   
-  let res = normalise_fc (List.map ~f:(fun a -> 
+  let res = normalize_fc (List.map ~f:(fun a -> 
 
-    let p =  (PureAnd(lhsp, rhsp)) in 
+    let p =  (PureAnd(lhsP, rhsP)) in 
     let single_res = trace_subtraction_single p a es in 
     (match single_res with | Bot -> 
       error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr a ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
@@ -483,7 +482,7 @@ let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect =
       if ec1 < 0 then eff :: compose_effects eff xs fp 
       else 
         let (exs', p', re', fc', ret', ec2) = x in 
-        let fc_subtracted = normalise_fc (trace_subtraction p p' (removeAny fc) re' fp) in 
+        let fc_subtracted = normalize_fc (trace_subtraction p p' (removeAny fc) re' fp) in 
         let retFinal, errorCode = match fc_subtracted with 
         | [Bot] -> Var "_", errorCode_exit
         | _ -> ret', ec2
@@ -495,24 +494,24 @@ let string2TermLi li = (List.map ~f:(fun a -> Var a) li)
 
 let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)list)): singleEffect = 
   let (exs, p, es, fc, ret, errorCode) = spec in 
-  let (newexs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) exs in 
-  let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2TermLi newexs) (string2TermLi exs) in 
-  let (substitute_foramlArgs_and_exs:singleEffect) = substitute_single_effect (newexs, p, es, fc, ret, errorCode) (mappings@ exs_mappsing) in 
+  let (newExs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) exs in 
+  let (exs_mappings : ((term*term)list)) = actual_formal_mappings (string2TermLi newExs) (string2TermLi exs) in 
+  let (substitute_formalArgs_and_exs:singleEffect) = substitute_single_effect (newExs, p, es, fc, ret, errorCode) (mappings@ exs_mappings) in 
 
-  let (_, _, _, _, ret', _) = substitute_foramlArgs_and_exs in 
+  let (_, _, _, _, ret', _) = substitute_formalArgs_and_exs in 
 
   match ret' with 
   | Var _ ->  (* if the callee return a var than get a fresh variable *)
-    let alltheFormalArgs = List.map ~f:(fun (a, _) -> a) mappings in 
+    let allFormalArgs = List.map ~f:(fun (a, _) -> a) mappings in 
     if (* if teh return val is one of the formalArgs, then no need to rename *)
-      existAux strict_compare_Term alltheFormalArgs ret' then substitute_foramlArgs_and_exs
+      existAux strict_compare_Term allFormalArgs ret' then substitute_formalArgs_and_exs
     else 
-      let newr = verifier_get_A_freeVar ret' in 
-      let (exs'', p'', es'', fc'', ret'', errorCode'') = (substitute_single_effect substitute_foramlArgs_and_exs [(Var newr, ret')]) in 
-      (exs''@[newr], p'', es'', fc'', ret'', errorCode'')
+      let newR = verifier_get_A_freeVar ret' in 
+      let (exs'', p'', es'', fc'', ret'', errorCode'') = (substitute_single_effect substitute_formalArgs_and_exs [(Var newR, ret')]) in 
+      (exs''@[newR], p'', es'', fc'', ret'', errorCode'')
 
     (* if not, no need to change it *)
-  | _ -> substitute_foramlArgs_and_exs
+  | _ -> substitute_formalArgs_and_exs
 
 
 let renameALLLocalVar(summary:summary) :summary = 
@@ -534,12 +533,12 @@ let renameALLLocalVar(summary:summary) :summary =
   (*
   match preCond with 
   | Exists (strLi, pIn) -> 
-    let (newexs:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) strLi in 
+    let (newEx s:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) strLi in 
     let string2Term li = (List.map ~f:(fun a -> Var a) li) in   
-    let (exs_mappsing : ((term*term)list)) = actual_formal_mappings (string2Term newexs) (string2Term strLi) in 
-    let preCond' =  Exists (newexs, substitute_pure pIn exs_mappsing) in 
-    let effects' = substitute_effect effects exs_mappsing in 
-    (signature, preCond', effects'), newexs
+    let (exs_mappings : ((term*term)list)) = actual_formal_mappings (string2Term newExs) (string2Term strLi) in 
+    let preCond' =  Exists (newExs, substitute_pure pIn exs_mappings) in 
+    let effects' = substitute_effect effects exs_mappings in 
+    (signature, preCond', effects'), newExs
   | _ -> summary, []
   *)
 
@@ -586,8 +585,8 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret, errorCode)]
 
   | CIfELse (p, e1, e2, _) -> 
-    let current1 = enforecePure p [state] in 
-    let current2 = enforecePure (Neg p) [state] in 
+    let current1 = enforcePure p [state] in 
+    let current2 = enforcePure (Neg p) [state] in 
     let effect1 = forward_reasoning signature current1 e1 in 
     let effect2 = forward_reasoning signature current2 e2 in
     (*debug_printCIfELse("effect1 = " ^ string_of_effect effect1) ; 
@@ -596,7 +595,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     effect1@effect2
 
   | CFunCall (f, xs, fp) -> 
-    let f_summary = findSpecifictaionSummaries f !summaries in
+    let f_summary = findSpecificationSummaries f !summaries in
     (match f_summary with 
     | None -> [state]
     | Some summary -> 
@@ -605,19 +604,19 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       debug_printCFunCall ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
       debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
 
-      let (_, foramlArgs), preC, postSummary = summary in 
+      let (_, formalArgs), preC, postSummary = summary in 
 
-      let mappings = (actual_formal_mappings xs foramlArgs)  in 
+      let mappings = (actual_formal_mappings xs formalArgs)  in 
 
-      let constriants4Mapping = List.fold_left ~f:(fun acc (a, f) -> PureAnd(acc, Eq(a, f))) mappings ~init:TRUE in 
+      let constraints4Mapping = List.fold_left ~f:(fun acc (a, f) -> PureAnd(acc, Eq(a, f))) mappings ~init:TRUE in 
 
       (* Check pre condition *) 
-      (match (checkPreCondition (PureAnd (p, constriants4Mapping)) preC) with 
+      (match (checkPreCondition (PureAnd (p, constraints4Mapping)) preC) with 
       | None -> (debug_printCFunCall ("checkPreCondition ERROR!");
                 [([], FALSE, Bot, [], Var "_", -1)])
-      | Some resdue -> 
-        debug_printCFunCall ("residue: " ^ string_of_pure resdue);
-        let state = enforecePureSingleEffect resdue state in 
+      | Some residue -> 
+        debug_printCFunCall ("residue: " ^ string_of_pure residue);
+        let state = enforcePureSingleEffect residue state in 
         
         (* substitute the formal arguments and rename all the existential variables  *) 
         let substitutedPostSummary = List.fold_left 
@@ -633,7 +632,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     )
   | CWhile (guard, body, fp) -> 
 
-    let eff_loop_body =  (aux body defultSingelEff) in 
+    let eff_loop_body =  (aux body defaultSinglesEff) in 
 
       
     let invariant = invariantInference state guard eff_loop_body in  
@@ -651,7 +650,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   List.fold_left ~f:(fun acc (a :singleEffect )-> 
     let (_, _ ,_, _, _,  errorCode) = a in 
     if errorCode < 0 then acc @ [a] 
-    else acc @ aux prog a) ~init:[] (normalise_effect states) 
+    else acc @ aux prog a) ~init:[] (normalize_effect states) 
 
 
 
@@ -673,15 +672,15 @@ let rec extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt
     )
   )
 
-| ImplicitCastExpr (_, stmt_list, _, _, _) ->
-  (match stmt_list with 
+| ImplicitCastExpr (_, stmtLi, _, _, _) ->
+  (match stmtLi with 
   | [] -> None 
   | y :: restY -> extractEventFromFUnctionCall y rest)
 
 | BinaryOperator (_, x::_, _, _)
 | ParenExpr (_, x::_, _) -> extractEventFromFUnctionCall x rest
-| (CallExpr (_, stmt_list, _)) -> 
-  (match stmt_list with 
+| (CallExpr (_, stmtLi, _)) -> 
+  (match stmtLi with 
   | [] -> None 
   | x::rest -> extractEventFromFUnctionCall x rest
   )
@@ -696,7 +695,7 @@ let loop_guard condition =
     | Some p -> p
 
 
-let rec creatIntermidiateValue4execution (li:term list) state : ((core_lang list) * (term list)) = 
+let rec createIntermediateValue4execution (li:term list) state : ((core_lang list) * (term list)) = 
   match li with 
   | [] -> [], []
   | x :: xs  -> 
@@ -709,7 +708,7 @@ let rec creatIntermidiateValue4execution (li:term list) state : ((core_lang list
         
     in 
     
-    let cl2, tLi2  = (creatIntermidiateValue4execution xs state) in 
+    let cl2, tLi2  = (createIntermediateValue4execution xs state) in 
     cl1@cl2, tLi1@tLi2
 
 
@@ -731,7 +730,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   let core_lang_of_decl_list (dec :Clang_ast_t.decl list) fp : core_lang = 
     let reverseDeclList = reverse dec in 
-    let rec assambleThePairs (li:Clang_ast_t.decl list) (acc: core_lang option): ((string * core_lang option * int) list) = 
+    let rec assembleThePairs (li:Clang_ast_t.decl list) (acc: core_lang option): ((string * core_lang option * int) list) = 
       match li with 
       | [] -> [] 
       | x :: xs  -> 
@@ -743,12 +742,12 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
             | None -> acc
             | Some stmt -> Some (convert_AST_to_core_program stmt))
           in 
-          (varName, acc', fp) :: assambleThePairs (xs) acc'
+          (varName, acc', fp) :: assembleThePairs (xs) acc'
         | _ -> []
   
         )
     in 
-    let (temp:((string * core_lang option * int) list)) = assambleThePairs reverseDeclList None in 
+    let (temp:((string * core_lang option * int) list)) = assembleThePairs reverseDeclList None in 
     let reverseBack = reverse temp in 
     let (coreLangList:core_lang list) = flattenList (List.map reverseBack ~f:(fun (a, b, c) -> 
       match b with 
@@ -762,8 +761,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   
   match instr with 
 
-  | IntegerLiteral (stmt_info, stmt_list, expr_info, integer_literal_info) ->
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+  | IntegerLiteral (stmt_info, stmtLi, expr_info, integer_literal_info) ->
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
 
     let int_str = integer_literal_info.ili_value in 
 
@@ -771,17 +770,17 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     else (CValue(Num (int_of_string(int_str)), fp))
 
 
-  | ParenExpr(stmt_info, stmt_list, _) 
-  | ImplicitCastExpr (stmt_info, stmt_list, _, _, _) 
-  | CStyleCastExpr (stmt_info, stmt_list, _, _, _) 
-  | CompoundStmt (stmt_info, stmt_list) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
+  | ParenExpr(stmt_info, stmtLi, _) 
+  | ImplicitCastExpr (stmt_info, stmtLi, _, _, _) 
+  | CStyleCastExpr (stmt_info, stmtLi, _, _, _) 
+  | CompoundStmt (stmt_info, stmtLi) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    let stmts = List.map stmtLi ~f:(fun a -> convert_AST_to_core_program a) in 
     sequentialComposingListStmt stmts fp 
 
-  | ReturnStmt  (stmt_info, stmt_list) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    let terms = List.map stmt_list ~f:(fun a -> stmt2Term a) in 
+  | ReturnStmt  (stmt_info, stmtLi) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    let terms = List.map stmtLi ~f:(fun a -> stmt2Term a) in 
 
     (
     match terms with
@@ -797,7 +796,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
 
   | CompoundAssignOperator (stmt_info, x::y::_, _, _, _) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     (match stmt2Term x, stmt2Term y with 
     |  t1 ,  t2 -> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
 
@@ -806,7 +805,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | DeclRefExpr (stmt_info, _, _, decl_ref_expr_info) ->
     (*"DeclRefExpr "^*)
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     (match decl_ref_expr_info.drti_decl_ref with 
     | None ->
       CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [], fp))
@@ -823,24 +822,24 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | DeclStmt (stmt_info, _, handlers) -> 
 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     core_lang_of_decl_list handlers fp
 
     
 
-  | WhileStmt (stmt_info, condition:: stmt_list) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+  | WhileStmt (stmt_info, condition:: stmtLi) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     let (loop_guard:pure) = loop_guard condition in 
-    let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
+    let stmts = List.map stmtLi ~f:(fun a -> convert_AST_to_core_program a) in 
 
     let core_lang = sequentialComposingListStmt stmts fp in 
     CWhile (loop_guard, core_lang, fp)
 
-  | (IfStmt (stmt_info, condition:: stmt_list, _))  -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+  | (IfStmt (stmt_info, condition:: stmtLi, _))  -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     let (conditional_guard:pure) = loop_guard condition in 
     let( (e1, e2 ) : (core_lang * core_lang)) = 
-      match stmt_list with 
+      match stmtLi with 
       | [] -> ( CValue (UNIT, fp), CValue (UNIT, fp))
       | [x] -> (convert_AST_to_core_program x, CValue (UNIT, fp))
       | x :: y :: _ -> (convert_AST_to_core_program x, convert_AST_to_core_program y)
@@ -849,7 +848,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
 
   | UnaryOperator (stmt_info, x::_, expr_info, unary_operator_info) ->
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     let varFromX = stmt2Term x 
     in 
     
@@ -872,7 +871,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     convert_AST_to_core_program x
 
   | BinaryOperator (stmt_info, x::y::_, _, binop_info)->
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
 
     (match stmt2Term x, stmt2Term y with 
     |  t1 ,  t2 -> 
@@ -905,10 +904,10 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     
     )
 
-  | MemberExpr (stmt_info, arlist, _, member_expr_info)  -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+  | MemberExpr (stmt_info, arLi, _, member_expr_info)  -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     let memArg = member_expr_info.mei_name.ni_name in 
-    let temp = List.map arlist ~f:(fun a -> stmt2Term a) in 
+    let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
     if String.compare memArg "" == 0 then CValue ((Var(memArg ), fp))
     else CValue((Member(Var memArg, temp), fp))
 
@@ -916,7 +915,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     
   | ForStmt (stmt_info, init:: decl_stmt:: condition:: update:: body) ->
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     (*
     print_endline ("decl_stmt " ^ Clang_ast_proj.get_stmt_kind_string decl_stmt); 
     (*it is usuallt decl_stmt NullStmt *)
@@ -934,7 +933,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     CSeq(init, CSeq(loop_body, loop))
 
   | DoStmt (stmt_info, body::condition::_) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     let (loop_guard:pure) = loop_guard condition in 
     let body = List.map [body] ~f:(fun a -> convert_AST_to_core_program a) in 
     let loop_body = sequentialComposingListStmt body fp in 
@@ -943,35 +942,35 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     CSeq(loop_body, loop)
 
 
-  | LabelStmt (stmt_info, stmt_list, label_name) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    let stmts = List.map stmt_list ~f:(fun a -> convert_AST_to_core_program a) in 
+  | LabelStmt (stmt_info, stmtLi, label_name) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    let stmts = List.map stmtLi ~f:(fun a -> convert_AST_to_core_program a) in 
     let core_lang = sequentialComposingListStmt stmts fp in 
     CSeq(CLable (label_name, fp), core_lang)
 
   | GotoStmt (stmt_info, _, {Clang_ast_t.gsi_label= label_name; _}) ->
     (* print_endline ("goto: " ^ label_name);  *) 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     CGoto (label_name, fp)
 
   | ContinueStmt (stmt_info, _) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     CContinue (fp)
   | BreakStmt (stmt_info, _)  -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     CBreak (fp)
 
   | CallExpr (stmt_info, x ::rest, ei) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     (match extractEventFromFUnctionCall x rest with 
-    | Some (Pos(calleeName, acturelli)) -> (* arli is the actual argument *)
+    | Some (Pos(calleeName, actualLi)) -> (* arli is the actual argument *)
       if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall calleeName then CValue (ANY, fp)
       else 
-        (if String.compare calleeName "assumeF" == 0 && List.length acturelli > 0 then 
-          (match acturelli with 
+        (if String.compare calleeName "assumeF" == 0 && List.length actualLi > 0 then 
+          (match actualLi with 
           | (Str str) :: _ -> 
             debug_print (str); 
-            debug_print(string_of_li string_of_term acturelli ",");
+            debug_print(string_of_li string_of_term actualLi ",");
             let fc = Parser.standaloneFC Lexer.token (Lexing.from_string str) in 
             CAssumeF(fc)
           | _  ->  CAssumeF(fc_default)
@@ -980,18 +979,18 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
           
           
         else 
-          let prefixCmds, acturelli' = creatIntermidiateValue4execution acturelli fp in 
-          sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, acturelli', fp))]) fp)
+          let prefixCmds, actualLi' = createIntermediateValue4execution actualLi fp in 
+          sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, actualLi', fp))]) fp)
     | _ -> 
         let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
     )
   | NullStmt (stmt_info, _) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
     CValue (Nil, fp)
 
-  | CXXConstructExpr (stmt_info, stmt_list, expr_info, cxx_construct_expr_info) -> 
-    let (fp:int) = stmt_intfor2FootPrint stmt_info in 
-    (*print_endline (string_of_int (List.length stmt_list));  *)
+  | CXXConstructExpr (stmt_info, stmtLi, expr_info, cxx_construct_expr_info) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    (*print_endline (string_of_int (List.length stmtLi));  *)
     CValue (ANY, fp)
     (*  struct st p  *)
 
@@ -1068,7 +1067,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           debug_print ("\n~~~~~~~~~~~~\n" ^ "annalysing " ^ funcName ^ "(" ^ string_of_li (fun a -> string_of_term a) parameters "," ^ ")");
           (*debug_print (source_Address);  *)
-          let (startingState:effect) = [defultSingelEff] in
+          let (startingState:effect) = [defaultSinglesEff] in
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
           
@@ -1081,7 +1080,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           debug_print (string_of_core_lang core_prog);
           let signature = (funcName, parameters) in 
 
-          let raw_final = normalise_effect (forward_reasoning signature startingState core_prog) in 
+          let raw_final = normalize_effect (forward_reasoning signature startingState core_prog) in 
           
           debug_print("\nRaw_final  = " ^ string_of_effect raw_final);
           let (postProcess:effect) = ((postProcess raw_final)) in

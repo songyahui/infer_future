@@ -159,7 +159,7 @@ type summary = signature * precondition * effect
 
 let (summaries: (summary list)ref) = ref []
 
-let defultSingelEff = ([], TRUE, Emp, fc_default, Var "_" , 0 )
+let defaultSinglesEff = ([], TRUE, Emp, fc_default, Var "_" , 0 )
 
 let verifier_get_A_freeVar term :string  =
   let prefix =
@@ -353,7 +353,7 @@ let rec comparePure (pi1:pure) (pi2:pure):bool =
   | _ -> false
 
 
-let normalise_terms (t:term) : term = 
+let normalize_terms (t:term) : term = 
   match t with 
 
   | Minus (Minus(_end, b), Minus(_end1, Plus(b1, inc))) -> 
@@ -641,7 +641,7 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
   | Bag _ -> re
 
 
-let rec normalise_pure (pi:pure) : pure = 
+let rec normalize_pure (pi:pure) : pure = 
   match pi with 
   | TRUE 
   | FALSE -> pi
@@ -650,25 +650,25 @@ let rec normalise_pure (pi:pure) : pure =
   | Gt ((Num n), (Var v)) -> Lt ((Var v), (Num n))
 
   | Gt (leftHandside,( Num 0)) -> 
-    (match normalise_terms leftHandside with
+    (match normalize_terms leftHandside with
     | Minus(t1, t2) -> Gt (t1, t2)
     | Plus(t1, ( Num n)) -> Gt (t1,  ( Num (-1 * n)))
     | t -> Gt(t, ( Num 0))
     )
   | LtEq (Minus(t1, t2),( Num 0)) -> LtEq (t1, t2)
   | Gt (Minus((Num n1),( Var v1)),( Num n2)) -> Lt((Var v1),  (Num(n1-n2)))
-  | Gt (t1, t2) -> Gt (normalise_terms t1, normalise_terms t2)
-  | Lt (t1, t2) -> Lt (normalise_terms t1, normalise_terms t2)
-  | GtEq (t1, t2) -> GtEq (normalise_terms t1, normalise_terms t2)
+  | Gt (t1, t2) -> Gt (normalize_terms t1, normalize_terms t2)
+  | Lt (t1, t2) -> Lt (normalize_terms t1, normalize_terms t2)
+  | GtEq (t1, t2) -> GtEq (normalize_terms t1, normalize_terms t2)
   | LtEq (Minus((Var x),( Num n1)), Minus(Minus((Var x1),( Var y)), ( Num n2))) -> 
     if String.compare x x1 == 0 then  LtEq((Var y), ( Num (n2-n1)))
-    else LtEq (normalise_terms (Minus((Var x),( Num n1))), normalise_terms (Minus(Minus((Var x1),( Var y)), ( Num n2))))
+    else LtEq (normalize_terms (Minus((Var x),( Num n1))), normalize_terms (Minus(Minus((Var x1),( Var y)), ( Num n2))))
 
-  | LtEq (t1, t2) -> LtEq (normalise_terms t1, normalise_terms t2)
-  | Eq (t1, t2) -> Eq (normalise_terms t1, normalise_terms t2)
+  | LtEq (t1, t2) -> LtEq (normalize_terms t1, normalize_terms t2)
+  | Eq (t1, t2) -> Eq (normalize_terms t1, normalize_terms t2)
   | PureAnd (pi1,pi2) -> 
-    let p1 = normalise_pure pi1 in 
-    let p2 = normalise_pure pi2 in 
+    let p1 = normalize_pure pi1 in 
+    let p2 = normalize_pure pi2 in 
     (match p1, p2 with 
     | TRUE, _ -> p2
     | _, TRUE -> p1
@@ -685,37 +685,37 @@ let rec normalise_pure (pi:pure) : pure =
   | Neg (Lt (t1, t2)) -> GtEq (t1, t2)
   | Neg (GtEq (t1, t2)) -> Lt (t1, t2)
   | Neg (LtEq (t1, t2)) -> Gt (t1, t2)
-  | Neg piN -> Neg (normalise_pure piN)
-  | PureOr (pi1,pi2) -> PureAnd (normalise_pure pi1, normalise_pure pi2)
-  | Exists (str, p) -> Exists (str, normalise_pure p)
-  | Forall (str, p) -> Forall (str, normalise_pure p)
+  | Neg piN -> Neg (normalize_pure piN)
+  | PureOr (pi1,pi2) -> PureAnd (normalize_pure pi1, normalize_pure pi2)
+  | Exists (str, p) -> Exists (str, normalize_pure p)
+  | Forall (str, p) -> Forall (str, normalize_pure p)
 
-let rec normalise_es (eff:regularExpr) : regularExpr = 
+let rec normalize_es (eff:regularExpr) : regularExpr = 
   match eff with 
   | Disjunction(es1, es2) -> 
-    let es1 = normalise_es es1 in 
-    let es2 = normalise_es es2 in 
+    let es1 = normalize_es es1 in 
+    let es2 = normalize_es es2 in 
     (match (es1, es2) with 
     | (Emp, Emp) -> Emp
     | (Emp, _) -> if nullable es2 then es2 else (Disjunction (es2, es1))
-    | (Bot, es) -> normalise_es es 
-    | (es, Bot) -> normalise_es es 
+    | (Bot, es) -> normalize_es es 
+    | (es, Bot) -> normalize_es es 
     | _ -> (Disjunction (es1, es2))
     )
   | Concate (es1, es2) -> 
-    let es1 = normalise_es es1 in 
-    let es2 = normalise_es es2 in 
+    let es1 = normalize_es es1 in 
+    let es2 = normalize_es es2 in 
     (match (es1, es2) with 
-    | (Emp, _) -> normalise_es es2
-    | (_, Emp) -> normalise_es es1
+    | (Emp, _) -> normalize_es es2
+    | (_, Emp) -> normalize_es es1
     | (Bot, _) -> Bot
     | (_, Bot) -> Bot
-    (*| (Disjunction (es11, es12), es3) -> Disjunction(normalise_es (Concate (es11,es3)),  normalise_es (Concate (es12, es3))) *)
-    | (Concate (es11, es12), es3) -> (Concate (es11, normalise_es (Concate (es12, es3))))
+    (*| (Disjunction (es11, es12), es3) -> Disjunction(normalize_es (Concate (es11,es3)),  normalize_es (Concate (es12, es3))) *)
+    | (Concate (es11, es12), es3) -> (Concate (es11, normalize_es (Concate (es12, es3))))
     | _ -> (Concate (es1, es2))
     )
   | Kleene effIn -> 
-    let effIn' = normalise_es effIn in 
+    let effIn' = normalize_es effIn in 
     Kleene (effIn')
 
   | _ -> eff 
@@ -749,7 +749,7 @@ let rec removeAny fcIn =
     if List.length temp == 0 then [Kleene (Singleton ANY)]
     else temp
 
-let normalise_fc (fc:futureCond) : futureCond = 
+let normalize_fc (fc:futureCond) : futureCond = 
   let rec existBot (fcIn:futureCond) : bool =
     match fcIn with 
     | [] -> false 
@@ -757,22 +757,22 @@ let normalise_fc (fc:futureCond) : futureCond =
     | _ :: xs -> existBot xs 
   in 
   (*debug_print ("original_fc: " ^ string_of_fc fc ); *) 
-  let fc' = (List.map ~f:normalise_es fc) in 
-  (*debug_print ("normalised fc: " ^ string_of_fc fc' ); *)
+  let fc' = (List.map ~f:normalize_es fc) in 
+  (*debug_print ("normalized fc: " ^ string_of_fc fc' ); *)
   if existBot fc' then [Bot] 
   else removeAny fc' 
 
 
 
 
-let rec normalise_effect (summary:effect)  : effect = 
-  let normalise_effect_a_pair (exs, p, re, fc, r, exitCode) = 
-    let p' = normalise_pure p in
+let rec normalize_effect (summary:effect)  : effect = 
+  let normalize_effect_a_pair (exs, p, re, fc, r, exitCode) = 
+    let p' = normalize_pure p in
     if entailConstrains p' FALSE then []
-    else [(exs, normalise_pure p, normalise_es re, normalise_fc fc, r, exitCode)] in 
+    else [(exs, normalize_pure p, normalize_es re, normalize_fc fc, r, exitCode)] in 
   match summary with 
   | [] -> []
-  | x :: xs -> (normalise_effect_a_pair x)  @  (normalise_effect xs)
+  | x :: xs -> (normalize_effect_a_pair x)  @  (normalize_effect xs)
 
 let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
 
@@ -993,7 +993,6 @@ let rec getAllTermsFromPure (p:pure) : term list =
     
 
 let rec findATermEquleToX (p:pure) (x:string) : term list = 
-  debug_postprocess (string_of_pure p);
   let aux (t:term) : term list =
     match t with 
     | Member _ | Var _ -> [t]
@@ -1083,7 +1082,7 @@ let postProcess  (eff:effect) : effect =
     | single :: xs -> 
       removeUnusedExs (removeIntermediateRes single) :: helper xs
   in 
-  normalise_effect (helper eff) 
+  normalize_effect (helper eff) 
 
 let remove_duplicates f lst =
   let rec aux seen = function
@@ -1140,7 +1139,7 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
       )
   in 
   match helper [] eff with 
-  | [] -> [defultSingelEff] 
+  | [] -> [defaultSinglesEff] 
   | eff -> eff
 
 let rec removePure (p:pure) (pToRemover:pure) : pure =
