@@ -643,7 +643,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       let r = verifier_get_A_freeVar index in  
       let state' = substitute_single_effect state [(Var r, index)] in 
 
-      let eff_loop_body = (aux body defaultSinglesEff) in 
+      let body' = removeNonArrayAssignment body in 
+      debug_Inv_Infer("loopbody " ^  string_of_core_lang body');
+      let eff_loop_body = (aux body' defaultSinglesEff) in 
       let trace, futureCond = invariantInference index interval eff_loop_body in  
       debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
       debug_Inv_Infer("InvFC " ^ string_of_fc futureCond);

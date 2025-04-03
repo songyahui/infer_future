@@ -1170,6 +1170,7 @@ let getInterval pure guard : (interval * pure) option =
 
 
 let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr * futureCond) = 
+  let body = postProcess body in 
   let (low, high) = inv in 
   let inv' = inv in 
   let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
@@ -1184,6 +1185,16 @@ let rec mutableTermCoreLang (stmts:core_lang) : term list =
   | CIfELse (_, e1, e2, _) 
   | CSeq (e1, e2) -> mutableTermCoreLang e1 @ mutableTermCoreLang e2 
   | _ -> []
+
+let rec removeNonArrayAssignment (stmts:core_lang) : core_lang =  
+  match stmts with 
+  | CAssign (Member _, e, _) ->  stmts
+  | CAssign (_, e, fp) -> CValue (UNIT,  fp) 
+  | CIfELse (b, e1, e2, fp) -> 
+    CIfELse (b, removeNonArrayAssignment e1, removeNonArrayAssignment e2, fp)
+
+  | CSeq (e1, e2) -> CSeq (removeNonArrayAssignment e1, removeNonArrayAssignment e2)
+  | _ -> stmts
 
 
 (* this function returns the inferred decreasingArgument in the form of string and the loop bound invaraint *)
