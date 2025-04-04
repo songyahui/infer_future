@@ -435,44 +435,7 @@ let rec findSpecificationSummaries (f:string) (summaries:summary list) : summary
 let add_exs exs1 effect : effect = 
   List.map ~f:(fun (exs, p, re, fc, r, errorCode) -> (exs@exs1, p, re, fc, r, errorCode)) effect 
 
-let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr =
-  match es with 
-  | Emp -> fc 
-  | Bot -> Bot 
-  | _ -> 
-    let fst = re_fst es in 
-    let res = List.fold_left ~f:(fun acc ev -> 
-      let derive1 = derivative p ev fc in 
-      let derive2 = derivative p ev es in  
-      let temp = trace_subtraction_single p derive1 derive2 in
-      Disjunction (acc, temp)) ~init:Bot fst  in 
-    let res = normalize_es res  in 
-    res
-    
-    
 
-let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
-  debug_printTraceSubtraction ("======="); 
-  debug_printTraceSubtraction (string_of_pure lhsP ^ " - " ^ string_of_pure rhsP);
-  debug_printTraceSubtraction (string_of_fc fc ^ " - " ^ string_of_regularExpr es);
-  
-  let res = normalize_fc (List.map ~f:(fun a -> 
-
-    let p =  (PureAnd(lhsP, rhsP)) in 
-    let single_res = trace_subtraction_single p a es in 
-    (match single_res with | Bot -> 
-      error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr a ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
-    | _ -> ()
-    ); 
-    
-    
-
-    single_res
-
-    
-    ) fc) in 
-  debug_printTraceSubtraction ("res = " ^ string_of_fc res ^ "\n");
-  res
 
 let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect = 
     match eff2 with

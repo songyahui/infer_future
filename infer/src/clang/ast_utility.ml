@@ -301,6 +301,7 @@ let rec string_of_event (ev:event) : string =
     (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec " \/ "^ ")"
 
 
+
 and string_of_regularExpr re = 
   match re with 
   | Bot              -> "⏊"
@@ -603,81 +604,11 @@ let compareTermListWithPure (p:pure) (t1:term list) (t2:term list) : bool =
 let has_overlap compareFun list1 list2 =
   List.exists ~f:(fun x -> existAux compareFun list2 x) list1
 
+(* list1 is a super set of list2 *)
+let superset list1 list2 p  = 
+  List.for_all ~f:(fun x -> existAux (fun a b -> compareTermWithPure p a b) list1 x) list2
+
 (*  this is to compute the derivative of ev-1(evTarget) *)
-let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
-  match ev with 
-  | Pos (str, args) -> 
-    (match evTarget with 
-    | ANY -> Emp 
-    | Pos (strTarget, argsTarget) ->  
-      if String.compare str strTarget == 0 && List.length args == List.length argsTarget then 
-        if compareTermListWithPure p args argsTarget  then Emp 
-        else Bot
-      else Bot
-    (*| Neg (strTarget, argsTarget) -> 
-      if String.compare str strTarget != 0 || List.length args != List.length argsTarget then Emp 
-      else if compareTermListWithPure p args argsTarget == false then Emp 
-      else Bot  
-      *)
-    | NegTerm (argsTarget:term list) -> 
-      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
-      else Emp 
-    | Bag _ -> Bot
-    )
-  (*| Neg _ -> Bot  *)
-  | NegTerm _ -> Bot
-  | Bag _ -> Bot 
-  | ANY  -> 
-    (match evTarget with 
-    | ANY -> Emp 
-    | _ -> Bot
-    )
-
-  
-(*
-match evTarget with 
-  | ANY -> Emp
-  | Pos (strTarget, argsTarget) -> 
-    (match ev with
-    | Pos (str, args) -> 
-      if String.compare str strTarget == 0 && List.length args == List.length argsTarget then 
-        if compareTermListWithPure p args argsTarget  then Emp 
-        else Bot
-      else Bot
-    | _ -> Bot
-    )
-  | Neg (strTarget, argsTarget) -> 
-    (match ev with
-    | Pos (str, args) -> 
-      if String.compare str strTarget != 0 || List.length args != List.length argsTarget then Emp 
-      else if compareTermListWithPure p args argsTarget == false then Emp 
-      else Bot  
-    | _ -> Bot
-    )
-  | NegTerm (argsTarget:term list) -> 
-    (match ev with
-    | Pos (_, (args:term list)) -> 
-    
-      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
-      else Emp 
-
-    | _ -> Bot
-    )
-  
-*)
-
-let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr = 
-  match re with 
-  | Emp | Bot -> Bot 
-  | Singleton evIn -> derivativeEvent p ev evIn 
-   
-  | Concate(re1, re2) -> 
-    let resRe1 = Concate (derivative p ev re1, re2) in 
-    if nullable re1 then Disjunction(resRe1, derivative p ev re2)
-    else resRe1
-  | Disjunction(re1, re2) -> Disjunction(derivative p ev re1, derivative p ev re2) 
-  | Kleene reIn -> Concate (derivative p ev reIn, re)
-
 
 let rec normalize_pure (pi:pure) : pure = 
   match pi with 
@@ -803,7 +734,6 @@ let normalize_fc (fc:futureCond) : futureCond =
 
 
 
-
 let rec normalize_effect (summary:effect)  : effect = 
   let normalize_effect_a_pair (exs, p, re, fc, r, exitCode) = 
     let p' = normalize_pure p in
@@ -823,6 +753,104 @@ let string_of_single_effect (exs, p, re, fc, r, exitCode) =
   string_of_term r  ^  
   (if exitCode < -1 then "; ERROR PATH! "  else "" )
   (* ^ string_of_int exitCode  *)
+
+let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
+  match ev with 
+  | Pos (str, args) -> 
+    (match evTarget with 
+    | ANY -> Emp  
+    | Pos (strTarget, argsTarget) ->  
+      if String.compare str strTarget == 0 && List.length args == List.length argsTarget then 
+        if compareTermListWithPure p args argsTarget then Emp 
+        else Bot
+      else Bot
+    (*| Neg (strTarget, argsTarget) -> 
+      if String.compare str strTarget != 0 || List.length args != List.length argsTarget then Emp 
+      else if compareTermListWithPure p args argsTarget == false then Emp 
+      else Bot  
+      *)
+    | NegTerm (argsTarget:term list) -> 
+      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
+      else Emp 
+    | Bag _ -> Singleton evTarget
+    )
+  | NegTerm (args) -> 
+    (match evTarget with 
+    | ANY -> Emp  
+    | Pos (_, argsTarget) ->  
+      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
+      else Emp 
+    | NegTerm (argsTarget:term list)  -> 
+      (* !_(li1) <: !_(li2) iff li1 >= li2 *)
+      if superset args argsTarget p then  Emp 
+      else Bot
+    | Bag _ -> Singleton evTarget
+    )
+  
+  | Bag (interval, spec)  -> 
+    (match evTarget with 
+    | ANY -> Emp 
+    | Bag (intervalTarget, specTarget) -> Bot
+      
+
+    | _ -> Bot
+    )
+  | ANY  -> 
+    (match evTarget with 
+    | ANY -> Emp 
+    | _ -> Bot
+    )
+
+  
+
+let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr = 
+  match re with 
+  | Emp | Bot -> Bot 
+  | Singleton evIn -> derivativeEvent p ev evIn 
+   
+  | Concate(re1, re2) -> 
+    let resRe1 = Concate (derivative p ev re1, re2) in 
+    if nullable re1 then Disjunction(resRe1, derivative p ev re2)
+    else resRe1
+  | Disjunction(re1, re2) -> Disjunction(derivative p ev re1, derivative p ev re2) 
+  | Kleene reIn -> Concate (derivative p ev reIn, re)
+
+
+
+
+let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr =
+  match es with 
+  | Emp -> fc 
+  | Bot -> Bot 
+  | _ -> 
+    let fst = re_fst es in 
+    let res = List.fold_left ~f:(fun acc ev -> 
+      let derive1 = derivative p ev fc in 
+      let derive2 = derivative p ev es in  
+      let temp = trace_subtraction_single p derive1 derive2 in
+      Disjunction (acc, temp)) ~init:Bot fst  in 
+    let res = normalize_es res  in 
+    res
+
+let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
+  debug_printTraceSubtraction ("======="); 
+  debug_printTraceSubtraction (string_of_pure lhsP ^ " - " ^ string_of_pure rhsP);
+  debug_printTraceSubtraction (string_of_fc fc ^ " - " ^ string_of_regularExpr es);
+  
+  let res = normalize_fc (List.map ~f:(fun a -> 
+
+    let p =  (PureAnd(lhsP, rhsP)) in 
+    let single_res = trace_subtraction_single p a es in 
+    (match single_res with | Bot -> 
+      error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr a ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
+    | _ -> ()
+    ); 
+    
+    single_res
+    ) fc) in 
+  debug_printTraceSubtraction ("res = " ^ string_of_fc res ^ "\n");
+  res
+
 
 
 let rec string_of_effect (summary:effect) = 
