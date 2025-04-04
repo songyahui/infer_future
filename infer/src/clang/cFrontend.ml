@@ -452,7 +452,7 @@ let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : r
     
 
 let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
-  debug_printTraceSubtraction ( "======="); 
+  debug_printTraceSubtraction ("======="); 
   debug_printTraceSubtraction (string_of_pure lhsP ^ " - " ^ string_of_pure rhsP);
   debug_printTraceSubtraction (string_of_fc fc ^ " - " ^ string_of_regularExpr es);
   
@@ -650,9 +650,18 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
       debug_Inv_Infer("InvFC " ^ string_of_fc futureCond);
       
-
+      (*
       let (exs', p', re', fc', ret', errorCode') = state' in 
-      [(exs'@[r], PureAnd(p',  Eq(index, high)), Concate(re', trace), fc'@futureCond, ret', errorCode')]
+      let postSummary =  [(exs'@[r], PureAnd(p',  Eq(index, high)), Concate(re', trace), fc'@futureCond, ret', errorCode')] in 
+      *)
+
+      let postSummary =  [([r], Eq(index, high), trace, futureCond, UNIT, 0)] in 
+      
+      let composeStates = (compose_effects state postSummary fp) in 
+      debug_Inv_Infer ("composeStates : " ^ string_of_effect composeStates); 
+
+      composeStates
+
     )
 
 
@@ -1171,7 +1180,7 @@ let rec input_lines file =
   | [line] -> (syhtrim line) :: input_lines file
   | _ -> assert false 
 ;;
-let retriveLinesOfCode (source:string) : (int) = 
+let retrieveLinesOfCode (source:string) : (int) = 
   let ic = open_in source in
   try
       let lines =  (input_lines ic ) in
@@ -1190,11 +1199,11 @@ let retriveLinesOfCode (source:string) : (int) =
 
    ;;
 
-let retrive_basic_info_from_AST ast_decl: (string * Clang_ast_t.decl list * int) = 
+let retrieve_basic_info_from_AST ast_decl: (string * Clang_ast_t.decl list * int) = 
     match ast_decl with
     | Clang_ast_t.TranslationUnitDecl (decl_info, decl_list, _, translation_unit_decl_info) ->
         let source =  translation_unit_decl_info.tudi_input_path in 
-        let lines_of_code  = retriveLinesOfCode source in 
+        let lines_of_code  = retrieveLinesOfCode source in 
         (source, decl_list, lines_of_code) 
  
     | _ -> assert false
@@ -1229,7 +1238,7 @@ let create_newdir path =
       Unix.mkdir path ~perm:full_permission
   with Sys_error _ -> ()
 
-let retriveComments (source:string) : (string list) = 
+let retrieveComments (source:string) : (string list) = 
   (*print_endline (source); *) 
   let partitions = Str.split (Str.regexp "/\*@") source in 
   (* print_endline (string_of_int (List.length partitions)); *)
@@ -1253,7 +1262,7 @@ let retriveComments (source:string) : (string list) =
   temp
   
 
-let retriveSpecifications (source:string) : (Ast_utility.summary list * int * int) = 
+let retrieveSpecifications (source:string) : (Ast_utility.summary list * int * int) = 
   
   try
     let ic = open_in source in
@@ -1265,7 +1274,7 @@ let retriveSpecifications (source:string) : (Ast_utility.summary list * int * in
     in 
     let line = helper lines in
       
-    let partitions = retriveComments line in (*in *)
+    let partitions = retrieveComments line in (*in *)
     let line_of_spec = List.fold_left partitions ~init:0 ~f:(fun acc a -> acc + (List.length (Str.split (Str.regexp "\n") a)))  in 
       
     (*
@@ -1374,13 +1383,13 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
   print_endline ("File analysed : \"" ^ source_file ^ "\"\n");  
 
-  let (source_Address, decl_list, lines_of_code) = retrive_basic_info_from_AST ast in
+  let (source_Address, decl_list, lines_of_code) = retrieve_basic_info_from_AST ast in
 
 
   let path = Sys.getcwd () in
-  let (_, lines_of_spec_macro, number_of_protocol_macro) = retriveSpecifications (path ^ "/spec.c") in 
+  let (_, lines_of_spec_macro, number_of_protocol_macro) = retrieveSpecifications (path ^ "/spec.c") in 
   
-  let (_, lines_of_spec_local, number_of_protocol_local) = retriveSpecifications (source_file) in 
+  let (_, lines_of_spec_local, number_of_protocol_local) = retrieveSpecifications (source_file) in 
 
   let start = Unix.gettimeofday () in 
   let _ = List.iter decl_list  

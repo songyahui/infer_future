@@ -129,21 +129,24 @@ type core_value = term
 
 type literal = string * (core_value list)
 
-type event = | Pos of literal | Neg of literal | NegTerm of term list | ANY
+type event = 
+  | Pos of literal 
+  (* | Neg of literal  *)
+  | NegTerm of term list | ANY 
+  | Bag of interval * ((pure * regularExpr) list) 
 
-type firstEle = event
+and firstEle = event
 
 
-type interval = (term * term)
+and interval = (term * term)
 
-type regularExpr = 
+and regularExpr = 
   | Bot 
   | Emp 
   | Singleton of event  
   | Disjunction of (regularExpr * regularExpr)
   | Concate of (regularExpr * regularExpr)
   | Kleene of regularExpr 
-  | Bag of interval * ((pure * regularExpr) list) 
 
 
 type futureCond = regularExpr list 
@@ -281,19 +284,24 @@ let string_of_loc n = "@" ^ string_of_int n
 
 let string_of_signature (str, args) = 
   str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) (args) "," ^ ")"
-  
-let string_of_event (ev:event) : string = 
-  match ev with 
-  | Pos (str, args) -> str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
-  | Neg (str, args) -> "!" ^ str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
-  | ANY -> "_"
-  | NegTerm args -> "!_" ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
-
 
 let string_of_interval ((i, j):interval) : string  = 
   "[" ^ string_of_term i ^ ".." ^ string_of_term j ^ "]"
 
-let rec string_of_regularExpr re = 
+  
+let rec string_of_event (ev:event) : string = 
+  match ev with 
+  | Pos (str, args) -> str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
+  (*
+  | Neg (str, args) -> "!" ^ str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
+  *)
+  | ANY -> "_"
+  | NegTerm args -> "!_" ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
+  | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_li 
+    (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec " \/ "^ ")"
+
+
+and string_of_regularExpr re = 
   match re with 
   | Bot              -> "⏊"
   | Emp              -> "𝝐 " 
@@ -304,8 +312,6 @@ let rec string_of_regularExpr re =
      
   | Kleene effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^*"
-  | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_li 
-    (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec " \/ "^ ")"
 
 
 
@@ -558,7 +564,6 @@ let rec nullable (eff:regularExpr) : bool =
   | Concate (eff1, eff2) -> nullable eff1 && nullable eff2  
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
   | Kleene _       -> true
-  | Bag _ -> false
 
 let rec nullableFC (eff:futureCond) : bool = 
   match eff with 
@@ -580,7 +585,6 @@ let rec re_fst re : firstEle list =
     else temp
   | Disjunction (eff1, eff2) -> (re_fst eff1) @ (re_fst eff2  )
   | Kleene re1 -> re_fst re1 
-  | Bag _ -> []
 
 let compareTermWithPure (p:pure) (t1:term) (t2:term) : bool = 
   let (equlity:pure) = Eq (t1, t2)  in
@@ -599,8 +603,39 @@ let compareTermListWithPure (p:pure) (t1:term list) (t2:term list) : bool =
 let has_overlap compareFun list1 list2 =
   List.exists ~f:(fun x -> existAux compareFun list2 x) list1
 
+(*  this is to compute the derivative of ev-1(evTarget) *)
 let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
-  match evTarget with 
+  match ev with 
+  | Pos (str, args) -> 
+    (match evTarget with 
+    | ANY -> Emp 
+    | Pos (strTarget, argsTarget) ->  
+      if String.compare str strTarget == 0 && List.length args == List.length argsTarget then 
+        if compareTermListWithPure p args argsTarget  then Emp 
+        else Bot
+      else Bot
+    (*| Neg (strTarget, argsTarget) -> 
+      if String.compare str strTarget != 0 || List.length args != List.length argsTarget then Emp 
+      else if compareTermListWithPure p args argsTarget == false then Emp 
+      else Bot  
+      *)
+    | NegTerm (argsTarget:term list) -> 
+      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
+      else Emp 
+    | Bag _ -> Bot
+    )
+  (*| Neg _ -> Bot  *)
+  | NegTerm _ -> Bot
+  | Bag _ -> Bot 
+  | ANY  -> 
+    (match evTarget with 
+    | ANY -> Emp 
+    | _ -> Bot
+    )
+
+  
+(*
+match evTarget with 
   | ANY -> Emp
   | Pos (strTarget, argsTarget) -> 
     (match ev with
@@ -629,7 +664,7 @@ let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr =
     | _ -> Bot
     )
   
-
+*)
 
 let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr = 
   match re with 
@@ -642,7 +677,6 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
     else resRe1
   | Disjunction(re1, re2) -> Disjunction(derivative p ev re1, derivative p ev re2) 
   | Kleene reIn -> Concate (derivative p ev reIn, re)
-  | Bag _ -> re
 
 
 let rec normalize_pure (pi:pure) : pure = 
@@ -917,14 +951,21 @@ let rec substitute_pure (p:pure) (actual_formal_mappings:((term*term)list)): pur
 
   | _ -> p 
 
-let substitute_event (ev:event) (actual_formal_mappings:((term*term)list)): event = 
+let rec substitute_event (ev:event) (actual_formal_mappings:((term*term)list)): event = 
   match ev with 
   | Pos (str, args) -> Pos (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
-  | Neg (str, args) -> Neg (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
+  (*| Neg (str, args) -> Neg (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
+  *)
   | ANY -> ANY
   | NegTerm (args) -> NegTerm (List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
+  | Bag ((b1, b2), li) -> 
+    let b1' = substitute_term b1 actual_formal_mappings in 
+    let b2' = substitute_term b2 actual_formal_mappings in 
+    let li' = List.map ~f:(fun (p, es)-> substitute_pure p actual_formal_mappings, substitute_RE es actual_formal_mappings) li  
+    in 
+    Bag((b1', b2'), li')
 
-let rec substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): regularExpr = 
+and substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): regularExpr = 
   match re with
   | Singleton ev  -> Singleton (substitute_event ev actual_formal_mappings) 
   | Concate (eff1, eff2) ->  
@@ -959,14 +1000,18 @@ let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): 
   spec
 
 
-let getAllTermsFromEvent (ev:event) : term list = 
+let rec getAllTermsFromEvent (ev:event) : term list = 
   match ev with 
   | Pos (_, args)
-  | Neg (_, args)
+  (*| Neg (_, args) *)
   | NegTerm args -> args 
   | ANY -> []
+  | Bag ((b1, b2), li) -> 
+  let tLi = List.fold_left ~f:(fun acc (p, es) -> acc @ getAllTermsFromRE es) ~init:[] li in 
+  tLi
 
-let rec getAllTermsFromRE re : term list =    
+
+and getAllTermsFromRE re : term list =    
   match re with 
   | Singleton ev  -> 
     let tep = getAllTermsFromEvent ev in 
@@ -974,9 +1019,6 @@ let rec getAllTermsFromRE re : term list =
   | Concate (eff1, eff2) 
   | Disjunction (eff1, eff2) -> getAllTermsFromRE eff1 @ getAllTermsFromRE eff2
   | Kleene reIn  -> getAllTermsFromRE reIn  
-  | Bag ((b1, b2), li) -> 
-    let tLi = List.fold_left ~f:(fun acc (p, es) -> acc @ getAllTermsFromRE es) ~init:[] li in 
-    tLi
   | Emp | Bot  -> [] 
   
 
@@ -1176,7 +1218,7 @@ let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr 
   let inv' = inv in 
   let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
   let (bagFC:((pure * regularExpr)list)) = flattenList (List.map ~f:(fun (_, p, _, fc , _, _) -> List.map ~f:(fun f -> (p, f)) fc) body) in 
-  Bag(inv', bagtrace), [Bag(inv', bagFC)]
+  Singleton (Bag(inv', bagtrace)), [Singleton (Bag(inv', bagFC))]
 
 
 
