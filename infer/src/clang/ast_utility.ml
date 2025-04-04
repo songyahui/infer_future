@@ -175,6 +175,7 @@ let verifier_get_A_freeVar term :string  =
   x
 
 type core_lang = 
+  | CSkip of state
   | CValue of core_value * state 
   | CLocal of string * state
   | CAssign of core_value * core_lang * state
@@ -304,7 +305,7 @@ let rec string_of_regularExpr re =
   | Kleene effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^*"
   | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_li 
-    (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec "\/"^ ")"
+    (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec " \/ "^ ")"
 
 
 
@@ -729,6 +730,7 @@ let rec string_of_fc (fc:futureCond) : string = string_with_seperator (fun a -> 
 
 let rec string_of_core_lang (e:core_lang) :string =
   match e with
+  | CSkip state -> "skip"  ^ string_of_loc state 
   | CValue (v, state) -> string_of_term v ^ string_of_loc state 
   | CAssign (v, e, state) -> Format.sprintf "%s=%s " (string_of_term v) (string_of_core_lang e) ^ string_of_loc state 
   | CIfELse (pi, t, e, state) -> Format.sprintf "if (%s) then %s else (%s)" (string_of_pure pi)  (string_of_core_lang t) (string_of_core_lang e) ^ string_of_loc state
@@ -1187,8 +1189,10 @@ let rec mutableTermCoreLang (stmts:core_lang) : term list =
 
 let rec removeNonArrayAssignment (stmts:core_lang) : core_lang =  
   match stmts with 
-  | CAssign (Member _, e, _) ->  stmts
-  | CAssign (_, e, fp) -> CValue (UNIT,  fp) 
+  | CAssign (Member (t, _), e, fp) -> 
+    (* remove the index, just use the t *)
+    CAssign (t, e, fp)
+  | CAssign (_, e, fp) -> CSkip fp
   | CIfELse (b, e1, e2, fp) -> 
     CIfELse (b, removeNonArrayAssignment e1, removeNonArrayAssignment e2, fp)
 

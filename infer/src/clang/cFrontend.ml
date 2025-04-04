@@ -674,6 +674,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       
   | CAssumeF (fcAssert) -> 
     [(exs, p, re, fc@fcAssert, ret, errorCode)]
+  | CSkip _ -> [state]
   | _ -> [state]
   in 
   List.fold_left ~f:(fun acc (a :singleEffect )-> 
@@ -749,7 +750,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     let rec composeStmtList (li:core_lang list): core_lang = 
       match li with 
-      | [] -> CValue (UNIT, fp) 
+      | [] -> (*CValue (UNIT, fp) *) CSkip fp
       | [x] -> x 
       | x :: xs -> CSeq(x, composeStmtList xs) 
     in 
@@ -869,8 +870,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (conditional_guard:pure) = loop_guard condition in 
     let( (e1, e2 ) : (core_lang * core_lang)) = 
       match stmtLi with 
-      | [] -> ( CValue (UNIT, fp), CValue (UNIT, fp))
-      | [x] -> (convert_AST_to_core_program x, CValue (UNIT, fp))
+      | [] -> ( CSkip fp, CSkip fp)
+      | [x] -> (convert_AST_to_core_program x,  CSkip fp)
       | x :: y :: _ -> (convert_AST_to_core_program x, convert_AST_to_core_program y)
     in 
     CIfELse (conditional_guard, e1, e2, fp)
@@ -1020,7 +1021,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | CXXConstructExpr (stmt_info, stmtLi, expr_info, cxx_construct_expr_info) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     (*print_endline (string_of_int (List.length stmtLi));  *)
-    CValue (ANY, fp)
+    (*CValue (ANY, fp) *)
+    CSkip fp
     (*  struct st p  *)
 
   | _ -> 
