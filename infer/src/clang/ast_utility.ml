@@ -774,6 +774,7 @@ let intersectionTwoInterval (p:pure) (intervalTarget:interval) (interval:interva
 
 let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr = 
   match re with 
+  | Kleene (Singleton ANY) -> re
   | Emp | Bot -> Bot 
   | Singleton evIn -> 
   
@@ -790,6 +791,18 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
   | Disjunction(re1, re2) -> Disjunction(derivative p ev re1, derivative p ev re2) 
   | Kleene reIn -> Concate (derivative p ev reIn, re)
 
+and derivativeIntegratedSpec (contextP:pure) (spec:integratedSpec) (specTarget:integratedSpec) : integratedSpec = 
+  List.fold_left ~f:(fun acc (pureT, esT) -> 
+    let rec helper li = 
+      match li with 
+      | [] -> acc@[(pureT, esT)]
+      | (p, es)::xs -> 
+        if entailConstrains (PureAnd(p, pureT)) FALSE then helper xs 
+        else 
+          acc@[(pureT, trace_subtraction_single contextP esT es)] 
+    in helper spec 
+
+  ) ~init:[] specTarget
 
 and derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
 match ev with 
@@ -842,7 +855,10 @@ match ev with
     debug_print("===========");
     debug_print ("spec      : " ^ string_of_integratedSpec spec); 
     debug_print ("specTarget: " ^ string_of_integratedSpec specTarget); 
-    Bot
+    let deriIntegrated = derivativeIntegratedSpec p spec specTarget in 
+    debug_print ("deriInt   : " ^ string_of_integratedSpec deriIntegrated); 
+    if List.for_all ~f:(fun (p, es) -> match es with | Emp -> true | _ -> false) deriIntegrated then Emp 
+    else Bot 
     
   | Neg (strTarget, argsTarget) -> Bot
 
@@ -861,7 +877,7 @@ match ev with
 
 
 
-let rec trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr =
+and trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr =
   match es with 
   | Emp -> fc 
   | Bot -> Bot 
