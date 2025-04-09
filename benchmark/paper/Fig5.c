@@ -53,3 +53,6 @@ void open_and_closeN_v1(int n, char** paths) {
   
 
 }
+
+
+//./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'

@@ -609,6 +609,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       let body' = removeNonArrayAssignment body in 
       debug_Inv_Infer("loopbody " ^  string_of_core_lang body');
       let eff_loop_body = (aux body' defaultSinglesEff) in 
+      debug_Inv_Infer("loopbodyEff " ^  string_of_effect eff_loop_body);
       let trace, futureCond = invariantInference index interval eff_loop_body in  
       debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
       debug_Inv_Infer("InvFC " ^ string_of_fc futureCond);
@@ -966,23 +967,18 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     (match extractEventFromFUnctionCall x rest with 
     | Some (Pos(calleeName, actualLi)) -> (* arli is the actual argument *)
-      if existAux (fun a b -> String.compare a b == 0) nonDetermineFunCall calleeName then CValue (ANY, fp)
-      else 
-        (if String.compare calleeName "assumeF" == 0 && List.length actualLi > 0 then 
-          (match actualLi with 
+      (if String.compare calleeName "assumeF" == 0 && List.length actualLi > 0 then 
+        (match actualLi with 
           | (Str str) :: _ -> 
             debug_print (str); 
             debug_print(string_of_li string_of_term actualLi ",");
             let fc = Parser.standaloneFC Lexer.token (Lexing.from_string str) in 
             CAssumeF(fc)
-          | _  ->  CAssumeF(fc_default)
-          
-          )
-          
-          
-        else 
-          let prefixCmds, actualLi' = createIntermediateValue4execution actualLi fp in 
-          sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, actualLi', fp))]) fp)
+          | _  ->  CAssumeF(fc_default) 
+        )
+      else 
+        let prefixCmds, actualLi' = createIntermediateValue4execution actualLi fp in 
+        sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, actualLi', fp))]) fp)
     | _ -> 
         let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
     )
@@ -993,7 +989,6 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | CXXConstructExpr (stmt_info, stmtLi, expr_info, cxx_construct_expr_info) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     (*print_endline (string_of_int (List.length stmtLi));  *)
-    (*CValue (ANY, fp) *)
     CSkip fp
     (*  struct st p  *)
 
@@ -1098,13 +1093,14 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
               acc@ extra)
             ~init:[] postProcess in 
 
+          let final  = resetErrorCodeEffect in 
 
-
+          (*
           let final  = checkPostConditionError resetErrorCodeEffect parameters fp in 
-
           debug_print("\final= " ^ string_of_effect final);
 
-          
+          *)
+
           let (summary:summary) =  signature, TRUE, final in 
 
           summaries := !summaries @ [(summary)])

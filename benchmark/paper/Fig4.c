@@ -34,7 +34,7 @@ int main() {
   free(q); 
   //Issue 4: double free
   //if (p.flag) 
-  free(p.f); 
+  if (p.flag) free(p.f); 
   return 0; 
 }
 

@@ -81,7 +81,7 @@ literal:
 | str=VAR LPAR tLi=list_of_terms  RPAR {(str, tLi)}
 
 not_event:
-(*| l=literal {Neg l} *)
+| l=literal {Neg l}
 | UNDERLINE LPAR tLi=list_of_terms  RPAR {NegTerm (tLi)}
 
 event:
@@ -103,7 +103,7 @@ es:
 pure:
 | TRUE {TRUE}
 | FALSE {FALSE}
-(*| NOTSINGLE LPAR a = pure RPAR {Neg a} *)
+| NOTSINGLE LPAR a = pure RPAR {Neg a}
 | LPAR r = pure RPAR { r }
 | a = term GT b = term {Gt (a, b)}
 | a = term LT b = term {Lt (a, b)}

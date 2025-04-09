@@ -38,7 +38,7 @@ let debug_postprocess str =
     else ()
 
 let debug_Inv_Infer str = 
-    if true then debug_print (str)
+    if false then debug_print (str)
     else ()
   
 
@@ -46,11 +46,15 @@ let debug_checkPostConditionError str =
     if false then debug_print (str)
     else ()
   
+let debug_derivative str = 
+    if true then debug_print (str)
+    else ()
+
 let report_print str = 
     if true then print_endline (str)
     else ()
   
-
+    
     
 
 let errormessage = ref ""
@@ -75,7 +79,6 @@ let rec string_with_seperator f li sep =
   | x :: xs  -> f x ^ sep ^ string_with_seperator f xs sep
 
 
-let nonDetermineFunCall = ["__nondet_int";"__VERIFIER_nondet_int"]
 
 let current_source_file = ref ""
 
@@ -131,9 +134,11 @@ type literal = string * (core_value list)
 
 type event = 
   | Pos of literal 
-  (* | Neg of literal  *)
+  | Neg of literal  
   | NegTerm of term list | ANY 
-  | Bag of interval * ((pure * regularExpr) list) 
+  | Bag of interval * integratedSpec
+  
+and integratedSpec = ((pure * regularExpr) list)
 
 and firstEle = event
 
@@ -288,18 +293,16 @@ let string_of_signature (str, args) =
 let string_of_interval ((i, j):interval) : string  = 
   "[" ^ string_of_term i ^ ".." ^ string_of_term j ^ "]"
 
-  
 let rec string_of_event (ev:event) : string = 
   match ev with 
   | Pos (str, args) -> str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
-  (*
   | Neg (str, args) -> "!" ^ str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
-  *)
   | ANY -> "_"
   | NegTerm args -> "!_" ^ "(" ^ string_with_seperator (fun a -> string_of_term a) args "," ^ ")"
-  | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_li 
-    (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec " \/ "^ ")"
+  | Bag (interval, spec) -> string_of_interval interval ^ "(" ^ string_of_integratedSpec spec  ^ ")"
 
+and string_of_integratedSpec (spec:integratedSpec) : string = 
+  string_of_li (fun (p, re) -> string_of_pure p ^ "::" ^ string_of_regularExpr re ) spec " \/ "
 
 
 and string_of_regularExpr re = 
@@ -754,59 +757,31 @@ let string_of_single_effect (exs, p, re, fc, r, exitCode) =
   (if exitCode < -1 then "; ERROR PATH! "  else "" )
   (* ^ string_of_int exitCode  *)
 
-let derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
-  match ev with 
-  | Pos (str, args) -> 
-    (match evTarget with 
-    | ANY -> Emp  
-    | Pos (strTarget, argsTarget) ->  
-      if String.compare str strTarget == 0 && List.length args == List.length argsTarget then 
-        if compareTermListWithPure p args argsTarget then Emp 
-        else Bot
-      else Bot
-    (*| Neg (strTarget, argsTarget) -> 
-      if String.compare str strTarget != 0 || List.length args != List.length argsTarget then Emp 
-      else if compareTermListWithPure p args argsTarget == false then Emp 
-      else Bot  
-      *)
-    | NegTerm (argsTarget:term list) -> 
-      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
-      else Emp 
-    | Bag _ -> Singleton evTarget
-    )
-  | NegTerm (args) -> 
-    (match evTarget with 
-    | ANY -> Emp  
-    | Pos (_, argsTarget) ->  
-      if has_overlap (compareTermWithPure p) args argsTarget then Bot 
-      else Emp 
-    | NegTerm (argsTarget:term list)  -> 
-      (* !_(li1) <: !_(li2) iff li1 >= li2 *)
-      if superset args argsTarget p then  Emp 
-      else Bot
-    | Bag _ -> Singleton evTarget
-    )
+let intersectionTwoInterval (p:pure) (intervalTarget:interval) (interval:interval) : (interval * interval list) = 
+  let (iTargetLow, iTargetHigh) =  intervalTarget in
+  let (iLow, iHigh) =  interval in
+  (* Target - Ev *)
+  (* [1-3] - [2-2] *)
+  if entailConstrains p (PureAnd(GtEq(iHigh, iTargetHigh), LtEq(iLow, iTargetLow))) 
+  then intervalTarget, []
+  else if strict_compare_Term iTargetLow iLow && entailConstrains p (Gt(iTargetHigh, iHigh)) 
+  then interval, [(Plus(iTargetHigh, Num 1), iHigh)]
+  else if strict_compare_Term iTargetHigh iHigh && entailConstrains p (Lt(iTargetLow, iLow)) 
+  then interval, [(iTargetLow, Minus(iLow, Num 1))]
+  else interval, [(Plus(iTargetHigh, Num 1), iHigh); (iTargetLow, Minus(iLow, Num 1))]
   
-  | Bag (interval, spec)  -> 
-    (match evTarget with 
-    | ANY -> Emp 
-    | Bag (intervalTarget, specTarget) -> Bot
-      
 
-    | _ -> Bot
-    )
-  | ANY  -> 
-    (match evTarget with 
-    | ANY -> Emp 
-    | _ -> Bot
-    )
-
-  
 
 let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr = 
   match re with 
   | Emp | Bot -> Bot 
-  | Singleton evIn -> derivativeEvent p ev evIn 
+  | Singleton evIn -> 
+  
+    let deriveEv = derivativeEvent p ev evIn  in 
+
+    debug_derivative("derivative: " ^ string_of_event evIn ^ " - " ^ string_of_event ev ^ " ~~> " ^ string_of_regularExpr deriveEv); 
+
+    deriveEv
    
   | Concate(re1, re2) -> 
     let resRe1 = Concate (derivative p ev re1, re2) in 
@@ -815,6 +790,74 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
   | Disjunction(re1, re2) -> Disjunction(derivative p ev re1, derivative p ev re2) 
   | Kleene reIn -> Concate (derivative p ev reIn, re)
 
+
+and derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
+match ev with 
+| Pos (str, args) -> 
+  (match evTarget with 
+  | ANY -> Emp  
+  | Pos (strTarget, argsTarget) ->  
+    if String.compare str strTarget == 0 && List.length args == List.length argsTarget then 
+      if compareTermListWithPure p args argsTarget then Emp 
+      else Bot
+    else Bot
+  | Neg (strTarget, argsTarget) -> 
+    if String.compare str strTarget != 0 || List.length args != List.length argsTarget then Emp 
+    else if compareTermListWithPure p args argsTarget == false then Emp 
+    else Bot  
+    
+  | NegTerm (argsTarget:term list) -> 
+    if has_overlap (compareTermWithPure p) args argsTarget then Bot 
+    else Emp 
+  | Bag _ -> 
+    debug_print ("I am not too sure derivativeEvent 1"); 
+    Singleton evTarget
+  )
+| NegTerm (args) -> 
+  (match evTarget with 
+  | ANY -> Emp  
+  | Pos (_, argsTarget) ->  
+    if has_overlap (compareTermWithPure p) args argsTarget then Bot 
+    else Emp 
+  | NegTerm (argsTarget:term list)  -> 
+    (* !_(li1) <: !_(li2) iff li1 >= li2 *)
+    if superset args argsTarget p then  Emp 
+    else Bot
+  | Neg (strTarget, argsTarget) -> Bot
+    
+  | Bag _ -> 
+    debug_print ("I am not too sure derivativeEvent 2"); 
+    Singleton evTarget
+  )
+
+| Bag (interval, spec)  -> 
+  (match evTarget with 
+  | ANY -> Emp 
+  | Bag (intervalTarget, specTarget) -> 
+    let commonArr, outstandingArr = intersectionTwoInterval p intervalTarget interval in 
+
+    debug_print ("commonArr     : " ^ string_of_interval commonArr); 
+    debug_print ("outstandingArr: " ^ string_of_li string_of_interval outstandingArr ", "); 
+
+    debug_print("===========");
+    debug_print ("spec      : " ^ string_of_integratedSpec spec); 
+    debug_print ("specTarget: " ^ string_of_integratedSpec specTarget); 
+    Bot
+    
+  | Neg (strTarget, argsTarget) -> Bot
+
+  | _ -> Bot
+  )
+| ANY  -> 
+  (match evTarget with 
+  | ANY -> Emp 
+  | _ -> Bot
+  )
+| Neg (str, args) -> 
+  (match evTarget with 
+  | ANY -> Emp 
+  | _ -> Bot
+  )
 
 
 
@@ -982,8 +1025,8 @@ let rec substitute_pure (p:pure) (actual_formal_mappings:((term*term)list)): pur
 let rec substitute_event (ev:event) (actual_formal_mappings:((term*term)list)): event = 
   match ev with 
   | Pos (str, args) -> Pos (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
-  (*| Neg (str, args) -> Neg (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
-  *)
+  | Neg (str, args) -> Neg (str, List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
+  
   | ANY -> ANY
   | NegTerm (args) -> NegTerm (List.map ~f:(fun a -> substitute_term a actual_formal_mappings) args)
   | Bag ((b1, b2), li) -> 
@@ -1031,7 +1074,7 @@ let substitute_effect (spec:effect) (actual_formal_mappings:((term*term)list)): 
 let rec getAllTermsFromEvent (ev:event) : term list = 
   match ev with 
   | Pos (_, args)
-  (*| Neg (_, args) *)
+  | Neg (_, args) 
   | NegTerm args -> args 
   | ANY -> []
   | Bag ((b1, b2), li) -> 
@@ -1242,6 +1285,8 @@ let getInterval pure guard : (interval * pure) option =
 
 let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr * futureCond) = 
   let body = postProcess body in 
+
+  debug_Inv_Infer("loopbodyEff after postProcess" ^  string_of_effect body);
   let (low, high) = inv in 
   let inv' = inv in 
   let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
