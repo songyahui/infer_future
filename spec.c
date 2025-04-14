@@ -1,3 +1,4 @@
+#include <fcntl.h>   // here has to be something  
 
 /*@ open(path, flag)  = 
     REQ TRUE

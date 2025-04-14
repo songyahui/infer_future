@@ -1312,7 +1312,7 @@ let partition_at i lst =
 
 let rec print_out_the_inferred_specifications summaries num : unit = 
   let (left, right) = partition_at num summaries in
-  List.iter ~f:(fun a -> report_print (string_of_summary a))  left; 
+  (* List.iter ~f:(fun a -> report_print (string_of_summary a))  left;  *)
   List.iter ~f:(fun a -> report_print (string_of_summary a))  right
 
 

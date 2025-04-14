@@ -877,17 +877,18 @@ match ev with
   | Bag (intervalTarget, specTarget) -> 
     let commonArr, outstandingArr = intersectionTwoInterval p intervalTarget interval in 
 
-    debug_print ("commonArr     : " ^ string_of_interval commonArr); 
-    debug_print ("outstandingArr: " ^ string_of_li string_of_interval outstandingArr ", "); 
+    debug_derivative ("commonArr     : " ^ string_of_interval commonArr); 
+    debug_derivative ("outstandingArr: " ^ string_of_li string_of_interval outstandingArr ", "); 
 
-    debug_print(">>>>>>>>>>");
-    debug_print ("spec      : " ^ string_of_integratedSpec spec); 
-    debug_print ("specTarget: " ^ string_of_integratedSpec specTarget); 
+    debug_derivative(">>>>>>>>>>");
+    debug_derivative ("spec      : " ^ string_of_integratedSpec spec); 
+    debug_derivative ("specTarget: " ^ string_of_integratedSpec specTarget); 
     let deriIntegrated = derivativeIntegratedSpec p spec specTarget in 
-    debug_print ("deriInt   : " ^ string_of_integratedSpec deriIntegrated); 
+    debug_derivative ("deriInt   : " ^ string_of_integratedSpec deriIntegrated); 
     if List.for_all ~f:(fun (p, es) -> match es with | Emp -> true | _ -> false) deriIntegrated then Emp 
-    else Bot 
-      (*Singleton (Bag (commonArr, deriIntegrated)) *)
+    else if String.compare (string_of_event ((Bag (commonArr, deriIntegrated)) )) (string_of_event ev) == 0 then Bot 
+    else  
+      Singleton (Bag (commonArr, deriIntegrated)) 
     
   | Neg (strTarget, argsTarget) -> Bot
 
@@ -906,18 +907,23 @@ match ev with
 
 
 
-and trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr =
+and trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr = 
+  let fc = normalize_es fc in 
+  let es = normalize_es es in 
   match es with 
   | Emp -> fc 
   | Bot -> Bot 
   | _ -> 
     let fst = re_fst es in 
-    let res = List.fold_left ~f:(fun acc ev -> 
+    let res = 
+      List.fold_left ~f:(fun acc ev -> 
       let derive1 = derivative p ev fc in 
       let derive2 = derivative p ev es in  
       let temp = trace_subtraction_single p derive1 derive2 in
       Disjunction (acc, temp)) ~init:Bot fst  in 
     let res = normalize_es res  in 
+    (* debug_print ("trace_subtraction_single: " ^ string_of_regularExpr fc ^ " - " ^ string_of_regularExpr es ^ " ~~> "^ string_of_regularExpr res);
+     *)
     res
 
 let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
