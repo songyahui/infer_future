@@ -782,9 +782,10 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
   | Emp | Bot -> Bot 
   | Singleton evIn -> 
   
+    debug_derivative("\nderivative: " ^ string_of_event evIn ^ " - " ^ string_of_event ev ^ " ~~> " ); 
     let deriveEv = derivativeEvent p ev evIn  in 
 
-    debug_derivative("derivative: " ^ string_of_event evIn ^ " - " ^ string_of_event ev ^ " ~~> " ^ string_of_regularExpr deriveEv); 
+    debug_derivative(string_of_regularExpr deriveEv); 
 
     deriveEv
    
@@ -856,13 +857,13 @@ match ev with
     debug_print ("commonArr     : " ^ string_of_interval commonArr); 
     debug_print ("outstandingArr: " ^ string_of_li string_of_interval outstandingArr ", "); 
 
-    debug_print("===========");
+    debug_print(">>>>>>>>>>");
     debug_print ("spec      : " ^ string_of_integratedSpec spec); 
     debug_print ("specTarget: " ^ string_of_integratedSpec specTarget); 
     let deriIntegrated = derivativeIntegratedSpec p spec specTarget in 
     debug_print ("deriInt   : " ^ string_of_integratedSpec deriIntegrated); 
     if List.for_all ~f:(fun (p, es) -> match es with | Emp -> true | _ -> false) deriIntegrated then Emp 
-    else Bot 
+    else Singleton (Bag (commonArr, deriIntegrated))
     
   | Neg (strTarget, argsTarget) -> Bot
 
