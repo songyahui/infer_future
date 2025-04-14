@@ -41,6 +41,9 @@ void open_and_closeN_v1(int n, char** paths) {
     i = i + 1; 
   }
 
+  // [0..n) fd!=-1  open.close  
+  // [0..n) fd =-1 (!_(fd))^* 
+  // [0..n) fd!=-1 (!_(fd))^*
 
   int k = 0 ; 
   while (k < n) 

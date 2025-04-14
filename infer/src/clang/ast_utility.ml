@@ -291,7 +291,7 @@ let string_of_signature (str, args) =
   str ^ "(" ^ string_with_seperator (fun a -> string_of_term a) (args) "," ^ ")"
 
 let string_of_interval ((i, j):interval) : string  = 
-  "[" ^ string_of_term i ^ ".." ^ string_of_term j ^ "]"
+  "[" ^ string_of_term i ^ ".." ^ string_of_term j ^ ")"
 
 let rec string_of_event (ev:event) : string = 
   match ev with 
@@ -686,7 +686,6 @@ let rec normalize_es (eff:regularExpr) : regularExpr =
     | (_, Emp) -> normalize_es es1
     | (Bot, _) -> Bot
     | (_, Bot) -> Bot
-    (*| (Disjunction (es11, es12), es3) -> Disjunction(normalize_es (Concate (es11,es3)),  normalize_es (Concate (es12, es3))) *)
     | (Concate (es11, es12), es3) -> (Concate (es11, normalize_es (Concate (es12, es3))))
     | _ -> (Concate (es1, es2))
     )
@@ -726,6 +725,28 @@ let rec removeAny fcIn =
     if List.length temp == 0 then [Kleene (Singleton ANY)]
     else temp
 
+let compare_interval (i1, i2) (i3, i4) : bool = 
+  strict_compare_Term i1 i3 && strict_compare_Term i2 i4 
+
+let normalize_bag_in_fc (fc:futureCond) : futureCond =  fc 
+  (*
+  match fc with 
+  | Singleton (Bag (i1, spec1)) :: Singleton (Bag (i2, spec2)) :: rest -> 
+    if compare_interval i1 i2 then 
+      let product = cartesian_product spec1 spec2 in 
+      let combine = List.fold_left (fun acc (s1, s2) -> 
+        let (p1, re1) = s1 in 
+        let (p2, re2) = s2 in 
+        if entailConstrains (PureAnd(p1, p2)) FALSE then [] 
+        else 
+
+      ) ~init:[] product in 
+      combine @ rest
+    else fc 
+  | _ -> fc
+  ;;
+  *)
+
 let normalize_fc (fc:futureCond) : futureCond = 
   let rec existBot (fcIn:futureCond) : bool =
     match fcIn with 
@@ -737,7 +758,9 @@ let normalize_fc (fc:futureCond) : futureCond =
   let fc' = (List.map ~f:normalize_es fc) in 
   (*debug_print ("normalized fc: " ^ string_of_fc fc' ); *)
   if existBot fc' then [Bot] 
-  else removeAny fc' 
+  else 
+    let afterRemoveAny =  removeAny fc' in 
+    normalize_bag_in_fc afterRemoveAny
 
 
 
