@@ -38,7 +38,7 @@ let debug_postprocess str =
     else ()
 
 let debug_Inv_Infer str = 
-    if true then debug_print (str)
+    if false then debug_print (str)
     else ()
   
 
@@ -1338,12 +1338,32 @@ let rec removeNonArrayAssignment (stmts:core_lang) : (core_lang) =
   | CSeq (e1, e2) -> CSeq (removeNonArrayAssignment e1, removeNonArrayAssignment e2)
   | _ -> stmts
 
+let rec getArrayHandlerMappingsPure (p:pure) : (term * term) list = 
+  match p with 
+  | Eq (Member (t, li), _) 
+  | Eq (_, Member (t, li)) 
+  | GtEq (Member (t, li), _) 
+  | GtEq (_, Member (t, li))
+  | LtEq (Member (t, li), _) 
+  | LtEq (_, Member (t, li))
+  | Lt (Member (t, li), _) 
+  | Lt (_, Member (t, li))
+  | Gt (Member (t, li), _) 
+  | Gt (_, Member (t, li)) ->  [(t, Member (t, li))]
+  | PureAnd (p1, p2) -> getArrayHandlerMappingsPure p1 @ getArrayHandlerMappingsPure p2 
+  | _ -> []
+
+  
+
 let rec getArrayHandlerMappings (stmts:core_lang) : (term * term) list =  
   match stmts with 
   | CAssign (Member (t, li), e, fp) -> [(t, Member (t, li))]
     (* remove the index, just use the t *)
   | CAssign (_, e, fp) -> []
-  | CIfELse (_, e1, e2, _) 
+  | CIfELse (b, e1, e2, _) -> 
+    getArrayHandlerMappingsPure b @ 
+    getArrayHandlerMappings e1 @ 
+    getArrayHandlerMappings e2 
   | CSeq (e1, e2) -> getArrayHandlerMappings e1 @ getArrayHandlerMappings e2 
   | _ -> []
 

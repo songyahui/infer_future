@@ -619,11 +619,6 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       let trace, futureCond = invariantInference index interval eff_loop_body in  
       debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
       debug_Inv_Infer("InvFC " ^ string_of_fc futureCond);
-      
-      (*
-      let (exs', p', re', fc', ret', errorCode') = state' in 
-      let postSummary =  [(exs'@[r], PureAnd(p',  Eq(index, high)), Concate(re', trace), fc'@futureCond, ret', errorCode')] in 
-      *)
 
       let postSummary =  [([r], Eq(index, high), trace, futureCond, UNIT, 0)] in 
       

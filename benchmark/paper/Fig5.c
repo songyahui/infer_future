@@ -42,14 +42,6 @@ void open_and_closeN_v1(int n, char** paths) {
   }
 
 
-
-
-}
-
-
-/*
-
-  
   int k = 0 ; 
   while (k < n) 
   {
@@ -58,6 +50,14 @@ void open_and_closeN_v1(int n, char** paths) {
       {close(fd[k]); k = k + 1;}
   }
   
+
+}
+
+
+/*
+
+  
+
 
 */
 
