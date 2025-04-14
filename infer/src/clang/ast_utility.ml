@@ -417,7 +417,9 @@ let rec term_to_expr ctx : term -> Z3.Expr.expr = function
   | ((Var v))           -> Z3.Arithmetic.Real.mk_const_s ctx v
   | ((Nil))           -> Z3.Arithmetic.Real.mk_const_s ctx "nil"
   | ((RES))           -> Z3.Arithmetic.Real.mk_const_s ctx "ret"
-
+  | (Member (a, b))   -> 
+    let str = (string_of_term a ^ "_" ^ string_of_li (string_of_term) b "_") in 
+    Z3.Arithmetic.Real.mk_const_s ctx str
   (*
   | Gen i          -> Z3.Arithmetic.Real.mk_const_s ctx ("t" ^ string_of_int i ^ "'")
   *)
@@ -805,10 +807,8 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
   | Emp | Bot -> Bot 
   | Singleton evIn -> 
   
-    debug_derivative("\nderivative: " ^ string_of_event evIn ^ " - " ^ string_of_event ev ^ " ~~> " ); 
     let deriveEv = derivativeEvent p ev evIn  in 
-
-    debug_derivative(string_of_regularExpr deriveEv); 
+    debug_derivative("\nderivative: " ^ string_of_event evIn ^ " - " ^ string_of_event ev ^ " ~~> "  ^ string_of_regularExpr deriveEv); 
 
     deriveEv
    
@@ -886,7 +886,8 @@ match ev with
     let deriIntegrated = derivativeIntegratedSpec p spec specTarget in 
     debug_print ("deriInt   : " ^ string_of_integratedSpec deriIntegrated); 
     if List.for_all ~f:(fun (p, es) -> match es with | Emp -> true | _ -> false) deriIntegrated then Emp 
-    else Singleton (Bag (commonArr, deriIntegrated))
+    else Bot 
+      (*Singleton (Bag (commonArr, deriIntegrated)) *)
     
   | Neg (strTarget, argsTarget) -> Bot
 

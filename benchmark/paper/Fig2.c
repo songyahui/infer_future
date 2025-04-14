@@ -2,33 +2,6 @@
 #include <unistd.h>   
 #include <stdlib.h>   
 
-/*@ open(path, flag)  = 
-    REQ TRUE
-    ENS (∃fd: fd=-1 ; 𝝐 ; (!_(fd))^* ; fd)  
-     \/ (∃fd  : !(fd=-1) ∧ flag=0 ; open(fd) ; (!write(fd))^* /\ (!close(fd))^* · close(fd) ·  (_)^* ; fd) 
-     \/ (∃fd : !(fd=-1) ∧ flag=1 ; open(fd) ; (!read(fd))^* /\ (!close(fd))^* · close(fd) ·  (_)^* ; fd) 
-     \/ (∃fd : !(fd=-1) ∧ flag=2 ; open(fd) ; (!close(fd))^* · close(fd) ·  (_)^* ; fd)  @*/
-
-/*@ close(fd) = 
-    REQ  TRUE
-    ENS (∃r : r=unit ; close(fd) ; (!_(fd))^* ; r) @*/
-
-/*@ write(fd, buf, size) =
-    REQ  TRUE
-    ENS (∃r : TRUE ; write(fd) ; (_)^* ; r) @*/
-
-/*@ read(fd, buf, size) =
-    REQ  TRUE
-    ENS (∃r : TRUE ; read(fd) ; (_)^* ; r) @*/
-
-/*@ exit(code) =
-    REQ  TRUE
-    ENS (: TRUE ; exit() ; (_)^* ; code; -2 ) @*/
-
-/*@ return(t) =
-    REQ  TRUE
-    ENS (: TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
-
 void assumeF(const char* path) ; 
 
 void test0(const char* path) 
@@ -36,7 +9,6 @@ void test0(const char* path)
     int fd = open(path, O_RDONLY); 
     return; 
 }
-
 
 int test1(const char* path) 
 { 

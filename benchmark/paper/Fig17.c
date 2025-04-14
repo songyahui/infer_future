@@ -2,7 +2,6 @@
 #include <unistd.h>   // For write(), close()
 #include <stdlib.h>   // For exit()
 
-
 /*@ start_doc() =
     REQ  TRUE
     ENS (: TRUE ; start_doc(); (start_page() · (!end_doc())^* · end_page() )^* · end_doc() ; unit) @*/
