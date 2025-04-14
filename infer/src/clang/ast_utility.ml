@@ -557,6 +557,10 @@ let rec actual_formal_mappings (arctul_args:term list) (formal_args:term list) :
     debug_print (string_of_list_terms formal_args); 
     []
 
+let string_of_mappings (mappings: ((term * term) list)) : string = 
+  (string_of_li (fun(actual, formal) -> string_of_term formal ^ " -> " ^ string_of_term actual )  mappings ", ")
+
+
 (*8*******************************)
 
 
@@ -945,19 +949,21 @@ let rec string_of_summaries li =
   | x :: xs  -> 
     string_of_summary x ^ 
     string_of_summaries xs 
+
+let rec find_from_mapping_list t (actual_formal_mappings:((term*term)list)) : term option  = 
+  match actual_formal_mappings with 
+  | [] -> None 
+  | (arctual, formal)::xs  -> 
+    if strict_compare_Term formal t then Some arctual
+    else find_from_mapping_list t xs 
     
 
 let substitute_term_aux (t:term) (actual_formal_mappings:((term*term)list)): term = 
-  let rec helper li : term option  = 
-    match li with 
-    | [] -> None 
-    | (arctual, formal)::xs  -> 
-      if strict_compare_Term formal t then Some arctual
-      else helper xs 
-  in 
-  match helper actual_formal_mappings with 
+  match find_from_mapping_list t actual_formal_mappings with 
   | None -> t 
   | Some t' -> t'
+
+
 
 let rec substitute_term (t:term) (actual_formal_mappings:((term*term)list)): term = 
   match t with
@@ -981,8 +987,11 @@ let rec substitute_term (t:term) (actual_formal_mappings:((term*term)list)): ter
   | TTimes (a, b) ->  TTimes (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
   | TDiv (a, b) ->  TDiv(substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)
   | Member (a, b) -> 
-    let b' = List.map b ~f:(fun c -> substitute_term c actual_formal_mappings) in 
-    Member (substitute_term a actual_formal_mappings, b')
+    (match find_from_mapping_list t actual_formal_mappings with 
+    | Some t' -> t' 
+    | None -> 
+      let b' = List.map b ~f:(fun c -> substitute_term c actual_formal_mappings) in 
+      Member (substitute_term a actual_formal_mappings, b'))
   | TApp (op, args) -> 
     let args' =List.map args ~f:(fun a -> substitute_term a actual_formal_mappings) in 
     TApp (op, args')

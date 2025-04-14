@@ -37,11 +37,17 @@ void open_and_closeN_v1(int n, char** paths) {
   while (i < n) 
   {
     fd[i] = open(paths[i], O_RDWR);
-    if (fd[i] < 0)  break; 
+    // if (fd[i] < 0)  break; 
     i = i + 1; 
   }
 
 
+
+
+}
+
+
+/*
 
   
   int k = 0 ; 
@@ -53,7 +59,6 @@ void open_and_closeN_v1(int n, char** paths) {
   }
   
 
-}
-
+*/
 
 //./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'

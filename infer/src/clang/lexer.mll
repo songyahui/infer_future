@@ -35,12 +35,10 @@ rule token = parse
 | "@*/" {RSPEC}
 | "REQ" {REQUIRE} 
 | "ENS" {ENSURE}
-| "Future" {FUTURESpec}
 | "TRUE" { TRUE }
 | "FALSE" { FALSE }
 | "nil" {NULL}
 | "unit" {UNIT}
-| "ret" {RETURN}
 | int      { INTE (int_of_string (Lexing.lexeme lexbuf)) }
 | id as str { VAR str }
 | "⏊" {BOTTOM}
@@ -65,14 +63,6 @@ rule token = parse
 | "∧" {PureConj}
 | "∃" {EXIST}
 | "\\/" {DISJ}
-| "<>" {FUTURE}  
-| "[]" {GLOBAL}
-| "->" {IMPLY}
-| '!' {LTLNOT}
-| 'X' {NEXT}
-| 'U' {UNTIL}
-| "&&" {LILAND}
-| "||" {LILOR}
 | eof { EOF }
 
 (* part 5 *)

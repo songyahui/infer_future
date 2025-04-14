@@ -611,6 +611,8 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
       let mappings = getArrayHandlerMappings body' in 
 
+      debug_Inv_Infer("mappings " ^  string_of_mappings mappings); 
+
       let eff_loop_body = substitute_effect 
         (aux body' defaultSinglesEff) mappings in 
       debug_Inv_Infer("loopbodyEff " ^  string_of_effect eff_loop_body);
