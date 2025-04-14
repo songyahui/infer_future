@@ -607,8 +607,12 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       let state' = substitute_single_effect state [(Var r, index)] in 
 
       let body' = removeNonArrayAssignment body in 
-      debug_Inv_Infer("loopbody " ^  string_of_core_lang body');
-      let eff_loop_body = (aux body' defaultSinglesEff) in 
+      debug_Inv_Infer("loopbody " ^  string_of_core_lang body'); 
+
+      let mappings = getArrayHandlerMappings body' in 
+
+      let eff_loop_body = substitute_effect 
+        (aux body' defaultSinglesEff) mappings in 
       debug_Inv_Infer("loopbodyEff " ^  string_of_effect eff_loop_body);
       let trace, futureCond = invariantInference index interval eff_loop_body in  
       debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
@@ -621,7 +625,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
       let postSummary =  [([r], Eq(index, high), trace, futureCond, UNIT, 0)] in 
       
-      let composeStates = (compose_effects state postSummary fp) in 
+      let composeStates = (compose_effects state' postSummary fp) in 
       debug_Inv_Infer ("composeStates : " ^ string_of_effect composeStates); 
 
       composeStates
@@ -632,18 +636,6 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       
 
 
-    (*
-    
-    let eff_loop_body =  (aux body defaultSinglesEff) in 
-    let invariant = invariantInference state guard eff_loop_body in  
-    (match invariant with 
-    | None -> 
-      error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
-      [(exs, p, re, fc, ret, -1)]
-    | Some effInv -> effInv
-    )
-    
-    *)
       
   | CAssumeF (fcAssert) -> 
     [(exs, p, re, fc@fcAssert, ret, errorCode)]

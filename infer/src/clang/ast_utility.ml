@@ -38,7 +38,7 @@ let debug_postprocess str =
     else ()
 
 let debug_Inv_Infer str = 
-    if false then debug_print (str)
+    if true then debug_print (str)
     else ()
   
 
@@ -1318,11 +1318,10 @@ let rec mutableTermCoreLang (stmts:core_lang) : term list =
   | CSeq (e1, e2) -> mutableTermCoreLang e1 @ mutableTermCoreLang e2 
   | _ -> []
 
-let rec removeNonArrayAssignment (stmts:core_lang) : core_lang =  
+let rec removeNonArrayAssignment (stmts:core_lang) : (core_lang) =  
   match stmts with 
-  | CAssign (Member (t, _), e, fp) -> 
+  | CAssign (Member (t, _), e, fp) -> stmts
     (* remove the index, just use the t *)
-    CAssign (t, e, fp)
   | CAssign (_, e, fp) -> CSkip fp
   | CIfELse (b, e1, e2, fp) -> 
     CIfELse (b, removeNonArrayAssignment e1, removeNonArrayAssignment e2, fp)
@@ -1330,6 +1329,17 @@ let rec removeNonArrayAssignment (stmts:core_lang) : core_lang =
   | CSeq (e1, e2) -> CSeq (removeNonArrayAssignment e1, removeNonArrayAssignment e2)
   | _ -> stmts
 
+let rec getArrayHandlerMappings (stmts:core_lang) : (term * term) list =  
+  match stmts with 
+  | CAssign (Member (t, li), e, fp) -> [(t, Member (t, li))]
+    (* remove the index, just use the t *)
+  | CAssign (_, e, fp) -> []
+  | CIfELse (_, e1, e2, _) 
+  | CSeq (e1, e2) -> getArrayHandlerMappings e1 @ getArrayHandlerMappings e2 
+  | _ -> []
+
+
+  
 
 (* this function returns the inferred decreasingArgument in the form of string and the loop bound invaraint *)
 let decreasingArgumentInference (pState:pure) (guard:pure) (body:core_lang) : (term * interval) option  = 

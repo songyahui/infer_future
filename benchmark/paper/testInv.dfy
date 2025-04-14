@@ -22,34 +22,46 @@ method open(path: string, mode: int) returns (fd: int)
 
 
 
-method iter_files(n: int, paths: array<string>) returns (fd: array<int>)
+method iter_files(n: int, paths: array<string>) returns (fd: seq<int>)
   requires 0 < n
   requires paths.Length >= n 
-  ensures fd.Length ==n
+  ensures |fd| == n
+  // ensures forall j :: 0 <= j < |fd| ==> fd[j] > 0 
   ensures forall j :: 0 <= j < n ==> fd[j] > 0 || fd[j] == -1
 {
-  fd := new int[n];
+  fd := [];
 
   var i:= 0;
-  assert i == 0 && fd.Length ==n && 0 < n && paths.Length >= n;
-
   while (i < n)
-  // Inv(i, n) <==> i <= n ; emp ; (_)^* 
+  invariant i <= n 
+  invariant forall j :: 0 <= j < |fd| ==> fd[j] > 0 
   {
+    var temp := open(paths[i], 0) ; 
+    if (temp < 0) {break; }
+    fd := fd + [temp]; // readonly
     i := i + 1; 
   }
-  // i == 0 && fd.Length ==n && 0 < n && paths.Length >= n <: 0 <= n ; emp ; (_)^* 
-  // i < n ; emp ; (_)^*   ==> i+1 <= n ; emp ; (_)^* 
-  // i == n ; emp ; (_)^*  
 
+  assert forall j :: 0 <= j < |fd| ==> fd[j] > 0 ; 
 
+  fd := [];
+  assert |fd| == 0; 
   i:= 0;
   while (i < n)
+  invariant i <= n 
+  invariant |fd| == i
+  invariant forall j :: 0 <= j < |fd| ==> fd[j] > 0  || fd[j] == -1
   {
-    fd[i] := open(paths[i], 0); // readonly
+    var temp := open(paths[i], 0) ; 
+    fd := fd + [temp]; // readonly
     i := i + 1; 
   }
+  assert i == n; 
+  assert |fd| == n;
+}
 
+
+/*
   ex fd ; PredOpen(n, fd); PredFCOpen(n, fd);  
 
   forall i in [0, n). 
@@ -99,8 +111,7 @@ Inv1(i, n, fd) @ Inv2(i, n, fd) ==
   i == n ; emp ; _^* \/ 
   i < n /\ fd[i] >= 0 ; open(fd[i]). close(fd[i]) ; G(!fd[i]) @ Inv3(i+1, n, fd)
   i < n /\ fd[i] < 0  ; emp ; G(!fd[i]) @ Inv3(i+1, n, fd)
-}
-
+*/
 
 // Inv(i, n, paths, fd)  == 
 //     i == n ;  emp ; _^* ; () 
