@@ -20,9 +20,13 @@
     REQ  TRUE
     ENS (: TRUE ; printf(p) ; (_)^* ; unit) @*/
 
+/*@ strncpy(a, b, c) =
+    REQ  TRUE
+    ENS (: TRUE ; strncpy(a) ; (_)^* ; unit) @*/
 
-#define BUFSIZER1 512
-#define BUFSIZER2 ((BUFSIZER1/2) - 8)
+
+
+#define BUFSIZER1 4
 
 int uaf () {
     int err; 
@@ -40,18 +44,13 @@ int uaf () {
 
 
 int main(int argc, char **argv) {
-    char *buf1R1;
-    char *buf2R1;
-    char *buf2R2;
-    char *buf3R2;
+    char *buf1R1, *buf2R1, *buf2R2, *buf3R2;
     buf1R1 = (char *) malloc(BUFSIZER1);
     buf2R1 = (char *) malloc(BUFSIZER1);
     free(buf2R1);
-    buf2R2 = (char *) malloc(BUFSIZER2);
-    buf3R2 = (char *) malloc(BUFSIZER2);
-    strncpy(buf2R1, argv[1], BUFSIZER1-1);
-    free(buf1R1);
-    free(buf2R2);
-    free(buf3R2);
+    buf2R2 = (char *) malloc(BUFSIZER1);
+    buf3R2 = (char *) malloc(BUFSIZER1);
+    strncpy(buf2R1, argv[1], BUFSIZER1); // Use-after-free
+    free(buf1R1); free(buf2R2); free(buf3R2);
 }
 
