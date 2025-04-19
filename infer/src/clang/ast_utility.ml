@@ -150,13 +150,14 @@ and regularExpr =
   | Emp 
   | Singleton of event  
   | Disjunction of (regularExpr * regularExpr)
+  | Conjunction of (regularExpr * regularExpr)
   | Concate of (regularExpr * regularExpr)
   | Kleene of regularExpr 
 
 
-type futureCond = regularExpr list 
+type futureCond = regularExpr 
 
-let fc_default =  [(Kleene (Singleton ANY))]
+let fc_default =  (Kleene (Singleton ANY))
 
 type exitCode = int 
 
@@ -197,10 +198,24 @@ type core_lang =
   | CGoto of string * state 
   | CAssumeF of futureCond 
 
+let rec flattenList lili = 
+  match lili with 
+  | [] -> []
+  | x :: xs -> List.append x (flattenList xs) 
+
+let cartesian_product li1 li2 = 
+    flattenList (List.map li1 ~f:(fun l1 -> 
+      List.map li2 ~f:(fun l2 -> (l1, l2))))
+
+
 let rec existAux f (li:('a list)) (ele:'a) = 
   match li with 
   | [] ->  false 
   | x :: xs -> if f x ele then true else existAux f xs ele
+
+let intersect f lst1 lst2 =
+  List.filter ~f:(fun x -> existAux f lst2 x) lst1
+
 
 
 let string_of_args pp args =
@@ -313,7 +328,9 @@ and string_of_regularExpr re =
   | Concate (eff1, eff2) -> string_of_regularExpr eff1 ^ " · " ^ string_of_regularExpr eff2 
   | Disjunction (eff1, eff2) ->
       "((" ^ string_of_regularExpr eff1 ^ ") \\/ (" ^ string_of_regularExpr eff2 ^ "))"
-     
+  | Conjunction (eff1, eff2) ->
+      "((" ^ string_of_regularExpr eff1 ^ ") /\\ (" ^ string_of_regularExpr eff2 ^ "))"
+  
   | Kleene effIn          ->
       "(" ^ string_of_regularExpr effIn ^ ")^*"
 
@@ -562,6 +579,10 @@ let rec actual_formal_mappings (arctul_args:term list) (formal_args:term list) :
 let string_of_mappings (mappings: ((term * term) list)) : string = 
   (string_of_li (fun(actual, formal) -> string_of_term formal ^ " -> " ^ string_of_term actual )  mappings ", ")
 
+let compare_event (ev1:event) (ev2:event) : bool = 
+  if String.compare (string_of_event ev1) (string_of_event ev2) == 0 then true 
+  else false  
+
 
 (*8*******************************)
 
@@ -573,15 +594,8 @@ let rec nullable (eff:regularExpr) : bool =
   | Singleton _    -> false
   | Concate (eff1, eff2) -> nullable eff1 && nullable eff2  
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
+  | Conjunction (eff1, eff2) -> nullable eff1 && nullable eff2  
   | Kleene _       -> true
-
-let rec nullableFC (eff:futureCond) : bool = 
-  match eff with 
-  | [] -> true   
-  | [x] -> nullable x 
-  | x :: xs ->
-    if nullable x then nullableFC xs 
-    else false 
 
 
 let rec re_fst re : firstEle list = 
@@ -594,6 +608,9 @@ let rec re_fst re : firstEle list =
     if nullable eff1 then temp @ (re_fst eff2  )
     else temp
   | Disjunction (eff1, eff2) -> (re_fst eff1) @ (re_fst eff2  )
+  | Conjunction (eff1, eff2) -> 
+    intersect compare_event (re_fst eff1) (re_fst eff2  )
+
   | Kleene re1 -> re_fst re1 
 
 let compareTermWithPure (p:pure) (t1:term) (t2:term) : bool = 
@@ -680,6 +697,17 @@ let rec normalize_es (eff:regularExpr) : regularExpr =
     | (es, Bot) -> normalize_es es 
     | _ -> (Disjunction (es1, es2))
     )
+  | Conjunction(es1, es2) -> 
+    let es1 = normalize_es es1 in 
+    let es2 = normalize_es es2 in 
+    (match (es1, es2) with 
+    | (Emp, Emp) -> Emp
+    | (Bot, _) 
+    | (_, Bot) -> Bot
+    | (es, Kleene (Singleton ANY)) 
+    | (Kleene (Singleton ANY), es) -> es
+    | _ -> (Conjunction (es1, es2))
+    )
   | Concate (es1, es2) -> 
     let es1 = normalize_es es1 in 
     let es2 = normalize_es es2 in 
@@ -699,7 +727,9 @@ let rec normalize_es (eff:regularExpr) : regularExpr =
 
 let string_of_loc n = "@" ^ string_of_int n 
 
-let rec string_of_fc (fc:futureCond) : string = string_with_seperator (fun a -> "("^string_of_regularExpr a ^")") fc " /\\ "
+let rec string_of_fc (fc:futureCond) : string = string_of_regularExpr fc 
+  (* string_with_seperator (fun a -> "("^string_of_regularExpr a ^")") fc " /\\ " *)
+  
 
 let rec string_of_core_lang (e:core_lang) :string =
   match e with
@@ -747,8 +777,6 @@ let normalize_bag_in_fc (fc:futureCond) : futureCond =  fc
     else fc 
   | _ -> fc
   ;;
-  *)
-
 let normalize_fc (fc:futureCond) : futureCond = 
   let rec existBot (fcIn:futureCond) : bool =
     match fcIn with 
@@ -764,13 +792,17 @@ let normalize_fc (fc:futureCond) : futureCond =
     let afterRemoveAny =  removeAny fc' in 
     normalize_bag_in_fc afterRemoveAny
 
+  *)
+
+  let normalize_fc (fc:futureCond) : futureCond = normalize_es fc 
+
 
 
 let rec normalize_effect (summary:effect)  : effect = 
   let normalize_effect_a_pair (exs, p, re, fc, r, exitCode) = 
     let p' = normalize_pure p in
     if entailConstrains p' FALSE then []
-    else [(exs, normalize_pure p, normalize_es re, normalize_fc fc, r, exitCode)] in 
+    else [(exs, normalize_pure p, normalize_es re, normalize_es fc, r, exitCode)] in 
   match summary with 
   | [] -> []
   | x :: xs -> (normalize_effect_a_pair x)  @  (normalize_effect xs)
@@ -808,7 +840,7 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
   | Singleton evIn -> 
   
     let deriveEv = derivativeEvent p ev evIn  in 
-    debug_derivative("\nderivative: " ^ string_of_event evIn ^ " - " ^ string_of_event ev ^ " ~~> "  ^ string_of_regularExpr deriveEv); 
+    debug_derivative("\nderivative: " ^ string_of_event evIn ^ " - " ^ string_of_event ev ^ " ~~> "  ^ string_of_fc deriveEv); 
 
     deriveEv
    
@@ -817,22 +849,26 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
     if nullable re1 then Disjunction(resRe1, derivative p ev re2)
     else resRe1
   | Disjunction(re1, re2) -> Disjunction(derivative p ev re1, derivative p ev re2) 
+  | Conjunction(re1, re2) -> Conjunction(derivative p ev re1, derivative p ev re2) 
   | Kleene reIn -> Concate (derivative p ev reIn, re)
 
 and derivativeIntegratedSpec (contextP:pure) (spec:integratedSpec) (specTarget:integratedSpec) : integratedSpec = 
   List.fold_left ~f:(fun acc (pureT, esT) -> 
+    
     let rec helper li = 
       match li with 
       | [] -> acc@[(pureT, esT)]
       | (p, es)::xs -> 
         if entailConstrains (PureAnd(p, pureT)) FALSE then helper xs 
         else 
-          acc@[(pureT, trace_subtraction_single contextP esT es)] 
+          let (subtraction:futureCond) =  (trace_subtraction_helper contextP esT es) in 
+          acc@[(pureT, subtraction)]
+          
     in helper spec 
 
   ) ~init:[] specTarget
 
-and derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : regularExpr = 
+and derivativeEvent (p:pure) (ev:firstEle) (evTarget:firstEle) : futureCond = 
 match ev with 
 | Pos (str, args) -> 
   (match evTarget with 
@@ -907,7 +943,8 @@ match ev with
 
 
 
-and trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regularExpr = 
+
+and trace_subtraction_helper (p:pure) (fc: regularExpr) (es:regularExpr) : futureCond = 
   let fc = normalize_es fc in 
   let es = normalize_es es in 
   match es with 
@@ -919,29 +956,32 @@ and trace_subtraction_single (p:pure) (fc: regularExpr) (es:regularExpr) : regul
       List.fold_left ~f:(fun acc ev -> 
       let derive1 = derivative p ev fc in 
       let derive2 = derivative p ev es in  
-      let temp = trace_subtraction_single p derive1 derive2 in
+      let temp = trace_subtraction_helper p derive1 derive2 in
       Disjunction (acc, temp)) ~init:Bot fst  in 
     let res = normalize_es res  in 
     (* debug_print ("trace_subtraction_single: " ^ string_of_regularExpr fc ^ " - " ^ string_of_regularExpr es ^ " ~~> "^ string_of_regularExpr res);
      *)
     res
 
+
 let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
   debug_printTraceSubtraction ("======="); 
   debug_printTraceSubtraction (string_of_pure lhsP ^ " - " ^ string_of_pure rhsP);
   debug_printTraceSubtraction (string_of_fc fc ^ " - " ^ string_of_regularExpr es);
   
-  let res = normalize_fc (List.map ~f:(fun a -> 
+  let res = normalize_es (
 
     let p =  (PureAnd(lhsP, rhsP)) in 
-    let single_res = trace_subtraction_single p a es in 
-    (match single_res with | Bot -> 
-      error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr a ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
+    let single_res = trace_subtraction_helper p fc es in 
+    (match single_res with 
+    | Bot -> 
+      error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr fc ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
     | _ -> ()
     ); 
     
     single_res
-    ) fc) in 
+
+  ) in 
   debug_printTraceSubtraction ("res = " ^ string_of_fc res ^ "\n");
   res
 
@@ -957,14 +997,6 @@ let rec string_of_effect (summary:effect) =
   | x :: xs -> "(" ^ string_of_a_pair x  ^ ") \\/ \n    " ^ string_of_effect xs 
 
 
-let rec flattenList lili = 
-  match lili with 
-  | [] -> []
-  | x :: xs -> List.append x (flattenList xs) 
-
-let cartesian_product li1 li2 = 
-    flattenList (List.map li1 ~f:(fun l1 -> 
-      List.map li2 ~f:(fun l2 -> (l1, l2))))
 
 let rec reverse li = 
   match li with 
@@ -1111,7 +1143,7 @@ and substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): r
     *)
   | _ -> re
 
-let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = (List.map ~f:(fun fce -> substitute_RE fce actual_formal_mappings) fc)
+let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = substitute_RE fc actual_formal_mappings
 
 let substitute_single_effect (spec:singleEffect) (actual_formal_mappings:((term*term)list)): singleEffect =
   let (exs, p, re, fc, r, exitCode) = spec in 
@@ -1144,13 +1176,13 @@ and getAllTermsFromRE re : term list =
     let tep = getAllTermsFromEvent ev in 
     tep 
   | Concate (eff1, eff2) 
+  | Conjunction (eff1, eff2)
   | Disjunction (eff1, eff2) -> getAllTermsFromRE eff1 @ getAllTermsFromRE eff2
   | Kleene reIn  -> getAllTermsFromRE reIn  
   | Emp | Bot  -> [] 
   
 
-let getAllTermsFromFC (fc:futureCond) : term list =
-  List.fold_left ~f:(fun acc re -> acc @ getAllTermsFromRE re) ~init:[] fc
+let getAllTermsFromFC (fc:futureCond) : term list = getAllTermsFromRE fc
 
 let rec getAllTermsFromPure (p:pure) : term list =
   match p with 
@@ -1281,6 +1313,7 @@ let rec notExistTermInForall (fc_Vars:term list) (forallVar:term list) : bool =
   | x :: xs  -> if existAux strict_compare_Term_Forall_Exist forallVar x  == false then true else notExistTermInForall xs forallVar
 
 
+(*
 let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCond * futureCond) = 
   List.fold_left ~f:(fun (fcInputOutput, fcExists) fcCurrent -> 
     let fc_Vars = remove_duplicates strict_compare_Term (getAllTermsFromFC [fcCurrent]) in 
@@ -1296,7 +1329,7 @@ let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCo
 let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect = 
   let aux ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect option = 
     match fc with 
-    | [Bot] -> (* if already error, then no need to check *) Some (exs, p, re, fc, r, exitCode)
+    | Bot -> (* if already error, then no need to check *) Some (exs, p, re, fc, r, exitCode)
     | _ -> 
       let inputOutputTerms = r::formalArgs in 
       let fcForall, fcExists = decompositeFCByForallExists fc inputOutputTerms in 
@@ -1322,6 +1355,9 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
   match helper [] eff with 
   | [] -> [defaultSinglesEff] 
   | eff -> eff
+*)
+
+
 
 let rec removePure (p:pure) (pToRemover:pure) : pure =
   match p with 
@@ -1346,9 +1382,9 @@ let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr 
   let (low, high) = inv in 
   let inv' = inv in 
   let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
-  let (bagFC:((pure * regularExpr)list)) = flattenList (List.map ~f:(fun (_, p, _, fc , _, _) -> List.map ~f:(fun f -> (p, f)) fc) body) in 
-  Singleton (Bag(inv', bagtrace)), [Singleton (Bag(inv', bagFC))]
-
+  let (bagFC:((pure * regularExpr)list)) = (List.map ~f:(fun (_, p, _, fc , _, _) -> (p, fc)) body) in 
+  Singleton (Bag(inv', bagtrace)), (Singleton (Bag(inv', bagFC))
+)
 
 
 let rec mutableTermCoreLang (stmts:core_lang) : term list = 

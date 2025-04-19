@@ -14,7 +14,6 @@
 %start summary 
 %start standaloneFC
 
-%type <(Ast_utility.futureCond)> futureCond
 %type <(Ast_utility.futureCond)> standaloneFC
 
 %type <(Ast_utility.summary)> summary
@@ -95,6 +94,8 @@ es:
 | ev=event { Singleton (ev) }
 | LPAR r = es RPAR { r }
 | a = es DISJ b = es { Disjunction(a, b) }
+| a = es CONJ b = es { Disjunction(a, b) }
+
 | a = es CONCAT b = es { Concate (a, b) } 
 | LPAR a = es  RPAR POWER KLEENE {Kleene a}
 
@@ -113,12 +114,17 @@ pure:
 | a = pure DISJ b = pure {PureOr (a, b)}
 | EXIST strs= list_of_exs CONCAT a = pure {Exists ( strs, a)}
 
+(*
+%type <(Ast_utility.futureCond)> futureCond
+
 futureCond: 
 | s = es {[s]}
 | li= futureCond CONJ s = es {li@[s]}
 
+*)
+
 standaloneFC:
-| fc = futureCond EOF    { fc }  
+| fc = es EOF    { fc }  
 
 errCode:
 | {0}
@@ -128,7 +134,7 @@ exs:
 | EXIST strs= list_of_exs {strs} 
 | {[]}
 
-singleEffect: LPAR strs = exs COLON p=pure SEMI es=es SEMI fc=futureCond SEMI r=term ec=errCode RPAR {(strs, p, es, fc, r, ec)}
+singleEffect: LPAR strs = exs COLON p=pure SEMI es=es SEMI fc=es SEMI r=term ec=errCode RPAR {(strs, p, es, fc, r, ec)}
 
 effect:
 | s = singleEffect {[s]}

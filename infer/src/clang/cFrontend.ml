@@ -445,12 +445,13 @@ let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect =
       if ec1 < 0 then eff :: compose_effects eff xs fp 
       else 
         let (exs', p', re', fc', ret', ec2) = x in 
-        let fc_subtracted = normalize_fc (trace_subtraction p p' (removeAny fc) re' fp) in 
-        let retFinal, errorCode = match fc_subtracted with 
-        | [Bot] -> Var "_", errorCode_exit
+        let fc_subtracted = normalize_fc (trace_subtraction p p' (normalize_es fc) re' fp) in 
+        let retFinal, errorCode = 
+        match fc_subtracted with 
+        | Bot -> Var "_", errorCode_exit
         | _ -> ret', ec2
         in 
-        (exs@exs', PureAnd(p, p'), Concate(re, re'), fc_subtracted@fc', retFinal, errorCode) :: compose_effects eff xs fp 
+        (exs@exs', PureAnd(p, p'), Concate(re, re'), Conjunction(fc_subtracted,fc'), retFinal, errorCode) :: compose_effects eff xs fp 
 
 
 let string2TermLi li = (List.map ~f:(fun a -> Var a) li) 
@@ -575,7 +576,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       (* Check pre condition *) 
       (match (checkPreCondition (PureAnd (p, constraints4Mapping)) preC) with 
       | None -> (debug_printCFunCall ("checkPreCondition ERROR!");
-                [([], FALSE, Bot, [], Var "_", -1)])
+                [([], FALSE, re, fc, Var "_", -1)])
       | Some residue -> 
         debug_printCFunCall ("residue: " ^ string_of_pure residue);
         let state = enforcePureSingleEffect residue state in 
@@ -635,7 +636,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
       
   | CAssumeF (fcAssert) -> 
-    [(exs, p, re, fc@fcAssert, ret, errorCode)]
+    [(exs, p, re, Conjunction (fc, fcAssert), ret, errorCode)]
   | CSkip _ -> [state]
   | _ -> [state]
   in 
