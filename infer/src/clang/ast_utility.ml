@@ -852,6 +852,14 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
   | Conjunction(re1, re2) -> Conjunction(derivative p ev re1, derivative p ev re2) 
   | Kleene reIn -> Concate (derivative p ev reIn, re)
 
+and derivativeIntegratedSpecEvent (contextP:pure) (spec:regularExpr) (specTarget:integratedSpec) : integratedSpec = 
+  List.map ~f:(fun (pureT, esT) -> 
+    (pureT, trace_subtraction_helper contextP esT spec)
+    
+    
+
+  )  specTarget
+
 and derivativeIntegratedSpec (contextP:pure) (spec:integratedSpec) (specTarget:integratedSpec) : integratedSpec = 
   List.fold_left ~f:(fun acc (pureT, esT) -> 
     
@@ -886,9 +894,23 @@ match ev with
   | NegTerm (argsTarget:term list) -> 
     if has_overlap (compareTermWithPure p) args argsTarget then Bot 
     else Emp 
-  | Bag _ -> 
-    debug_print ("I am not too sure derivativeEvent 1"); 
-    Singleton evTarget
+  | Bag (interval, spec) ->  
+    (match args with 
+    | [Member (Var strTarget, [Num index])]  -> 
+      let deriIntegrated = derivativeIntegratedSpecEvent p (Singleton (Pos (str, [Var strTarget]))) spec  in 
+      let (start, close) = interval in 
+
+      let newInterval1 = (start, Num index) in 
+      let newInterval2 = (Num (index + 1) , close) in 
+      let newInterval3 = (Num index,  (Num (index + 1))) in 
+
+      Conjunction(Conjunction (Singleton (Bag (newInterval1, spec)), Singleton (Bag (newInterval2, spec))), Singleton (Bag(newInterval3, deriIntegrated)))
+
+    | _ -> 
+      debug_print ("I am not too sure derivativeEvent 1"); 
+      Singleton evTarget
+    
+    )
   )
 | NegTerm (args) -> 
   (match evTarget with 
