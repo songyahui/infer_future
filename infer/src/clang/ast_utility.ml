@@ -831,6 +831,16 @@ let intersectionTwoInterval (p:pure) (intervalTarget:interval) (interval:interva
   then interval, [(iTargetLow, Minus(iLow, Num 1))]
   else interval, [(Plus(iTargetHigh, Num 1), iHigh); (iTargetLow, Minus(iLow, Num 1))]
   
+let rec decomposeteFCtoRE (fc:futureCond) : (futureCond list) = 
+  match fc with 
+  | Conjunction (fc1, fc2) -> decomposeteFCtoRE fc1 @ decomposeteFCtoRE fc2 
+  | _ -> [fc]
+
+let rec mergebackFCfromRE (fcli: futureCond list) : futureCond = 
+  match fcli with 
+  | [] -> fc_default 
+  | [x] -> x
+  | x :: xs -> Conjunction (x, mergebackFCfromRE xs)
 
 
 let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr = 
@@ -854,7 +864,7 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
 
 and derivativeIntegratedSpecEvent (contextP:pure) (spec:regularExpr) (specTarget:integratedSpec) : integratedSpec = 
   List.map ~f:(fun (pureT, esT) -> 
-    (pureT, trace_subtraction_helper contextP esT spec)
+    (pureT, normalize_es (trace_subtraction_helper contextP esT spec))
     
     
 
@@ -904,7 +914,13 @@ match ev with
       let newInterval2 = (Num (index + 1) , close) in 
       let newInterval3 = (Num index,  (Num (index + 1))) in 
 
-      Conjunction(Conjunction (Singleton (Bag (newInterval1, spec)), Singleton (Bag (newInterval2, spec))), Singleton (Bag(newInterval3, deriIntegrated)))
+
+      let fc1 = if strict_compare_Term start (Num index) then [] else [Singleton (Bag (newInterval1, spec))] in 
+      let fc2 = if strict_compare_Term (Num (index + 1)) close then [] else [Singleton (Bag (newInterval2, spec))] in  
+
+      let temp = mergebackFCfromRE (fc1@fc2) in 
+
+      Conjunction(temp, Singleton (Bag(newInterval3, deriIntegrated)))
 
     | _ -> 
       debug_print ("I am not too sure derivativeEvent 1"); 
@@ -1335,18 +1351,21 @@ let rec notExistTermInForall (fc_Vars:term list) (forallVar:term list) : bool =
   | x :: xs  -> if existAux strict_compare_Term_Forall_Exist forallVar x  == false then true else notExistTermInForall xs forallVar
 
 
-(*
 let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCond * futureCond) = 
-  List.fold_left ~f:(fun (fcInputOutput, fcExists) fcCurrent -> 
-    let fc_Vars = remove_duplicates strict_compare_Term (getAllTermsFromFC [fcCurrent]) in 
+  let left, right = List.fold_left ~f:(fun (fcInputOutput, fcExists) fcCurrent -> 
+    let fc_Vars = remove_duplicates strict_compare_Term (getAllTermsFromFC fcCurrent) in 
     match fc_Vars with 
     | [] -> (fcInputOutput@[fcCurrent], fcExists)
     | fc_Vars ->  
       let fcInputOutput' = if existTermInForall fc_Vars forallVar then fcInputOutput@[fcCurrent] else fcInputOutput in 
       let fcExists' = if notExistTermInForall fc_Vars forallVar then fcExists@[fcCurrent] else fcExists in 
       (fcInputOutput', fcExists')
-  ) ~init:([], []) fc
+  ) ~init:([], []) (decomposeteFCtoRE fc) in 
+  normalize_es (mergebackFCfromRE left), normalize_es(mergebackFCfromRE right)
+
+  
   ;;
+
 
 let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect = 
   let aux ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect option = 
@@ -1357,13 +1376,17 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
       let fcForall, fcExists = decompositeFCByForallExists fc inputOutputTerms in 
       debug_checkPostConditionError("fcForall = " ^ string_of_fc fcForall);
       debug_checkPostConditionError("fcExists = " ^ string_of_fc fcExists); 
-      (if nullableFC fcExists 
+      (if nullable fcExists 
       then ()
       else 
         error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_fc fcExists ^ "\n  Trace subtracted = 𝝐 " ^ "\n  Pure =  " ^ string_of_pure p));  
 
-      if List.length fcForall == 0 then None 
-      else Some (exs, p, re, fcForall, r, exitCode)
+      (match fcForall with
+      | Bot -> None 
+      | _ -> Some (exs, p, re, fcForall, r, exitCode)
+      )
+      
+
   in 
   let rec helper (acc:effect) (effSingleLi:effect) = 
     match effSingleLi with 
@@ -1377,8 +1400,6 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
   match helper [] eff with 
   | [] -> [defaultSinglesEff] 
   | eff -> eff
-*)
-
 
 
 let rec removePure (p:pure) (pToRemover:pure) : pure =

@@ -1085,11 +1085,12 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let final  = resetErrorCodeEffect in 
 
+          
           (*
-          let final  = checkPostConditionError resetErrorCodeEffect parameters fp in 
+          let final  = checkPostConditionError final parameters fp in 
           debug_print("\final= " ^ string_of_effect final);
-
-          *)
+*)
+          
 
           let (summary:summary) =  signature, TRUE, final in 
 
