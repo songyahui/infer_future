@@ -94,7 +94,7 @@ es:
 | ev=event { Singleton (ev) }
 | LPAR r = es RPAR { r }
 | a = es DISJ b = es { Disjunction(a, b) }
-| a = es CONJ b = es { Disjunction(a, b) }
+| a = es CONJ b = es { Conjunction(a, b) }
 
 | a = es CONCAT b = es { Concate (a, b) } 
 | LPAR a = es  RPAR POWER KLEENE {Kleene a}

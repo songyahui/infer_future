@@ -451,7 +451,7 @@ let rec compose_effects (eff:singleEffect) eff2 (fp:int) : effect =
         | Bot -> Var "_", errorCode_exit
         | _ -> ret', ec2
         in 
-        (exs@exs', PureAnd(p, p'), Concate(re, re'), Conjunction(fc_subtracted,fc'), retFinal, errorCode) :: compose_effects eff xs fp 
+        (exs@exs', PureAnd(p, p'), Concate(re, re'), Conjunction(fc_subtracted, fc'), retFinal, errorCode) :: compose_effects eff xs fp 
 
 
 let string2TermLi li = (List.map ~f:(fun a -> Var a) li) 
@@ -1258,7 +1258,7 @@ let retrieveSpecifications (source:string) : (Ast_utility.summary list * int * i
       *)
 
     with e ->                      (* 一些不可预见的异常发生 *)
-      debug_print ("Something wrong in parsing  " ^ source);
+      debug_print ("Something wrong in  " ^ source);
       ([], 0, 0)
 
    ;;
@@ -1334,11 +1334,13 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
   print_endline ("File analysed : \"" ^ source_file ^ "\"\n");  
 
+  let source_file_root = "/" ^ Filename.dirname source_file ^ "/spec.c" in 
+
   let (source_Address, decl_list, lines_of_code) = retrieve_basic_info_from_AST ast in
 
 
   let path = Sys.getcwd () in
-  let (_, lines_of_spec_macro, number_of_protocol_macro) = retrieveSpecifications (path ^ "/spec.c") in 
+  let (_, lines_of_spec_macro, number_of_protocol_macro) = retrieveSpecifications (path ^ source_file_root) in 
   
   let (_, lines_of_spec_local, number_of_protocol_local) = retrieveSpecifications (source_file) in 
 

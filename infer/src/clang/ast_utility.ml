@@ -47,7 +47,7 @@ let debug_checkPostConditionError str =
     else ()
   
 let debug_derivative str = 
-    if true then debug_print (str)
+    if false then debug_print (str)
     else ()
 
 let report_print str = 
