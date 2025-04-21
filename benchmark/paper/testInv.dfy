@@ -34,15 +34,14 @@ method iter_files(n: int, paths: array<string>) returns (fd: seq<int>)
   var i:= 0;
   while (i < n)
   invariant i <= n 
-  invariant forall j :: 0 <= j < |fd| ==> fd[j] > 0 
+  invariant forall j :: 0 <= j < |fd| ==> fd[j] > 0 || fd[j] == -1
   {
     var temp := open(paths[i], 0) ; 
-    if (temp < 0) {break; }
     fd := fd + [temp]; // readonly
     i := i + 1; 
   }
 
-  assert forall j :: 0 <= j < |fd| ==> fd[j] > 0 ; 
+  assert forall j :: 0 <= j < |fd| ==> fd[j] > 0 || fd[j] == -1;
 
   fd := [];
   assert |fd| == 0; 
