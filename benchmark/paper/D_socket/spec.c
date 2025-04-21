@@ -2,4 +2,4 @@
 
 /*@ socket(a, b, c) = 
     REQ TRUE
-    ENS (∃ l : TRUE ; socket()  ; (!close(l))^* · close(l) ·  (_)^* ; l)  @*/
+    ENS (∃ l : l>=0 ; socket()  ; (!close(l))^* · close(l) ·  (_)^* ; l)  @*/

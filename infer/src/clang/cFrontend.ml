@@ -399,7 +399,8 @@ let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option =
   | NullStmt _ -> Some (Ast_utility.FALSE)
 
   
-  | _ -> Some (Gt ((( Var (Clang_ast_proj.get_stmt_kind_string instr))), ( Var ("null"))))
+  | _ -> None (*
+  Some (Gt ((( Var (Clang_ast_proj.get_stmt_kind_string instr))), ( Var ("null")))) *)
 
 
 let si_source_location_to_int (s:Clang_ast_t.source_location) = 
@@ -830,14 +831,34 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | (IfStmt (stmt_info, condition:: stmtLi, _))  -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
-    let (conditional_guard:pure) = loop_guard condition in 
     let( (e1, e2 ) : (core_lang * core_lang)) = 
       match stmtLi with 
       | [] -> ( CSkip fp, CSkip fp)
       | [x] -> (convert_AST_to_core_program x,  CSkip fp)
       | x :: y :: _ -> (convert_AST_to_core_program x, convert_AST_to_core_program y)
     in 
-    CIfELse (conditional_guard, e1, e2, fp)
+    (
+    match stmt2Pure condition with
+    | Some conditional_guard -> 
+      
+      CIfELse (conditional_guard, e1, e2, fp)
+    | None -> 
+      
+      let freshVar = verifier_get_A_freeVar UNIT in
+
+      let cond_core = convert_AST_to_core_program condition in 
+
+      CSeq(CAssign(Var freshVar, cond_core, fp) , 
+        CIfELse (Neg (Eq (Var freshVar, Num 0)) , e1, e2, fp))
+
+
+            
+            
+
+    )
+
+
+
 
 
   | UnaryOperator (stmt_info, x::_, expr_info, unary_operator_info) ->
@@ -981,6 +1002,9 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     (*print_endline (string_of_int (List.length stmtLi));  *)
     CSkip fp
     (*  struct st p  *)
+  | InitListExpr (stmt_info, stmtLi, expr_info) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    CValue ((Num 0), fp)
 
   | _ -> 
     CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
@@ -1384,9 +1408,11 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
     ["No. Premitive Spec"; string_of_int (number_of_protocol_macro + number_of_protocol_local)];
     ["No. Inferred Spec"; string_of_int (List.length !summaries - (number_of_protocol_macro + number_of_protocol_local))];
     ["No. Inferred Inv"; string_of_int (!invariantInference_counter)];
-    ["Lines of Spec"; string_of_int (lines_of_spec_macro + lines_of_spec_local)];
     ["No. Violation"; string_of_int (!errormessagecounter) ];
     ["Analysis Time"; string_of_float (analysisTime) ^ "s"];
+    (*
+    ["Lines of Spec"; string_of_int (lines_of_spec_macro + lines_of_spec_local)];
+    *)
     ["Report File"; path ^ dirName ^ "/detail.txt" ];
   ]
   in 
@@ -1395,7 +1421,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
   List.iter ~f:(fun li -> 
     match li with 
-    | [_;b] -> print_string (b  ^ ", ") ; 
+    | [_;b] -> print_string (b  ^ ",") ; 
     | _ -> ()) table; 
 
   ()
