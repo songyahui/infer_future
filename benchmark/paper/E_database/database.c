@@ -1,6 +1,6 @@
 // https://developernote.com/2019/09/measuring-sqlite-performance/
 
-#include <iostream>
+
 #include "sqlite3.h"
 
 /*@ sqlite3_open(path, db)  = 
@@ -32,6 +32,6 @@ int main()
 
     // ... perform benchmark operations ...
 
-    sqlite3_close(db);
+    // sqlite3_close(db);
     return 0;
 }

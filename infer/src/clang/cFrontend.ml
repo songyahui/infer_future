@@ -1378,17 +1378,25 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   else   
     (let () = finalReport := ("\nIn " ^ source_Address ^ ":\n") ^ !finalReport  in 
     outputFinalReport (!finalReport) output_detail)) ; 
-
-  print_table ~headers:["Summary"; ""]
+  let table = 
   [
+    ["Lines of Code"; string_of_int (lines_of_code + 1 - lines_of_spec_local )];
     ["No. Premitive Spec"; string_of_int (number_of_protocol_macro + number_of_protocol_local)];
     ["No. Inferred Spec"; string_of_int (List.length !summaries - (number_of_protocol_macro + number_of_protocol_local))];
+    ["No. Inferred Inv"; string_of_int (!invariantInference_counter)];
     ["Lines of Spec"; string_of_int (lines_of_spec_macro + lines_of_spec_local)];
-    ["Lines of Code"; string_of_int (lines_of_code + 1 - lines_of_spec_local )];
-    ["Analysis Time"; string_of_float (analysisTime) ^ "s"];
     ["No. Violation"; string_of_int (!errormessagecounter) ];
+    ["Analysis Time"; string_of_float (analysisTime) ^ "s"];
     ["Report File"; path ^ dirName ^ "/detail.txt" ];
-  ];
+  ]
+  in 
+  print_table ~headers:["Summary"; ""]
+  table;
+
+  List.iter ~f:(fun li -> 
+    match li with 
+    | [_;b] -> print_string (b  ^ ", ") ; 
+    | _ -> ()) table; 
 
   ()
 

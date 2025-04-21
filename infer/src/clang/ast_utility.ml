@@ -14,6 +14,8 @@ let errorCode_break = -4
 let retKeyword = "Return"
 let finalReport = (ref "")
 let verifier_counter: int ref = ref 0;;
+let invariantInference_counter: int ref = ref 0;;
+
 
 
 let debug_print str = 
@@ -591,6 +593,7 @@ let rec nullable (eff:regularExpr) : bool =
   match eff with 
   | Bot            -> false 
   | Emp            -> true 
+  | Singleton (Bag(_, spec)) -> List.for_all ~f:(fun (_, es) -> nullable es)  spec
   | Singleton _    -> false
   | Concate (eff1, eff2) -> nullable eff1 && nullable eff2  
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
@@ -1385,8 +1388,6 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
       | Bot -> None 
       | _ -> Some (exs, p, re, fcForall, r, exitCode)
       )
-      
-
   in 
   let rec helper (acc:effect) (effSingleLi:effect) = 
     match effSingleLi with 
@@ -1420,6 +1421,8 @@ let getInterval pure guard : (interval * pure) option =
 
 let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr * futureCond) = 
   let body = postProcess body in 
+
+  invariantInference_counter := !invariantInference_counter + 1; 
 
   debug_Inv_Infer("loopbodyEff after postProcess" ^  string_of_effect body);
   let (low, high) = inv in 

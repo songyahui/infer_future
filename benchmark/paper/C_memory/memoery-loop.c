@@ -1,18 +1,5 @@
 #include <stdlib.h>
 
-/*@ free(ptr)  = 
-    REQ  TRUE
-    ENS (∃ r : r=unit ; free(ptr) ; (!_(ptr))^* ; r) @*/
-
-/*@ malloc(size) = 
-    REQ size > 0 
-    ENS (∃ l : TRUE ; malloc(l)  ; (!free(l))^* · free(l) ·  (_)^* ; l)  @*/
-
-/*@ return(t) =
-    REQ  TRUE
-    ENS (: TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
-
-
     
 void test1 () {
     void *arr;

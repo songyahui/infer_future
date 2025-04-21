@@ -6,19 +6,6 @@
 #include <sys/types.h>
 #include <stdio.h>
 
-/*@ free(ptr)  = 
-    REQ  TRUE
-    ENS (∃ r : r=unit ; free(ptr) ; (!_(ptr))^* ; r) @*/
-
-/*@ malloc(size) = 
-    REQ size > 0 
-    ENS (∃ l : TRUE ; malloc(l)  ; (!free(l))^* · free(l) ·  (_)^* ; l)  @*/
-
-/*@ return(t) =
-    REQ  TRUE
-    ENS (: TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
-
-
 struct auth {
         char name[32];
         int auth;
