@@ -43,7 +43,7 @@ let debug_Inv_Infer str =
   
 
 let debug_checkPostConditionError str = 
-    if false then debug_print (str)
+    if true then debug_print (str)
     else ()
   
 let debug_derivative str = 

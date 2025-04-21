@@ -1073,7 +1073,6 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           debug_print("\nRaw_final  = " ^ string_of_effect raw_final);
           let (postProcess:effect) = ((postProcess raw_final)) in
 
-          debug_print("\nPostProcess= " ^ string_of_effect postProcess);
           let resetErrorCodeEffect = List.fold_left ~f:(
             fun acc (a, b, c, d, e, f) -> 
               let extra = 
@@ -1085,11 +1084,12 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let final  = resetErrorCodeEffect in 
 
+          debug_print("\nPostProcess= " ^ string_of_effect final);
+
           
-          (*
           let final  = checkPostConditionError final parameters fp in 
           debug_print("\final= " ^ string_of_effect final);
-*)
+
           
 
           let (summary:summary) =  signature, TRUE, final in 
