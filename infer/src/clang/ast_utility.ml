@@ -797,18 +797,7 @@ let normalize_fc (fc:futureCond) : futureCond =
 
   *)
 
-  let normalize_fc (fc:futureCond) : futureCond = normalize_es fc 
-
-
-
-let rec normalize_effect (summary:effect)  : effect = 
-  let normalize_effect_a_pair (exs, p, re, fc, r, exitCode) = 
-    let p' = normalize_pure p in
-    if entailConstrains p' FALSE then []
-    else [(exs, normalize_pure p, normalize_es re, normalize_es fc, r, exitCode)] in 
-  match summary with 
-  | [] -> []
-  | x :: xs -> (normalize_effect_a_pair x)  @  (normalize_effect xs)
+let normalize_fc (fc:futureCond) : futureCond = normalize_es fc 
 
 let string_of_exs exs = string_with_seperator (fun a -> a) exs " "
 
@@ -820,6 +809,70 @@ let string_of_single_effect (exs, p, re, fc, r, exitCode) =
   string_of_term r  ^  
   (if exitCode < -1 then "; ERROR PATH! "  else "" )
   (* ^ string_of_int exitCode  *)
+
+
+let rec string_of_effect (summary:effect) = 
+
+  let string_of_a_pair (exs, p, re, fc, r, exitCode) = string_of_single_effect (exs, p, re, fc, r, exitCode) in 
+
+  match summary with 
+  | [] -> ""
+  | [x] -> "(" ^ string_of_a_pair x ^ ")"
+  | x :: xs -> "(" ^ string_of_a_pair x  ^ ") \\/ \n    " ^ string_of_effect xs 
+
+
+
+let equal_gen f a b = 
+  if String.compare (f a) (f b) == 0 then true else false 
+
+let rec state_merging (summary:effect) : effect = 
+  let rec iteration (eff:singleEffect) (li:effect) : effect option = 
+    let (exs, p, re, fc, r, exitCode) = eff in  
+    match li with 
+    | [] -> None 
+    | (exs', p', re', fc', r', exitCode') :: xs ->  
+      if  equal_gen (fun li -> string_of_li (fun a -> a) li "") exs exs' 
+          && equal_gen string_of_regularExpr re re' 
+          && equal_gen string_of_fc fc fc' 
+          && equal_gen string_of_term r r' 
+          && equal_gen string_of_int exitCode exitCode' 
+      then 
+        let p_new = if entailConstrains (Neg (PureOr(p, p'))) FALSE then TRUE else PureOr(p, p') in 
+        Some ((exs, p_new, re, fc, r, exitCode) :: xs)
+      else 
+        (match (iteration eff xs) with 
+        | None -> None 
+        | Some res -> Some ((exs', p', re', fc', r', exitCode'):: res)
+        )  
+  in 
+  match summary with 
+  | [] -> [] 
+  | x :: xs  -> 
+    (match iteration x xs with 
+    | None -> x :: state_merging xs 
+    | Some res -> state_merging res 
+    )
+
+
+
+
+let rec normalize_effect (summary:effect)  : effect = 
+  let normalize_effect_a_pair (exs, p, re, fc, r, exitCode) = 
+    let p' = normalize_pure p in
+    if entailConstrains p' FALSE then []
+    else [(exs, normalize_pure p, normalize_es re, normalize_es fc, r, exitCode)] in 
+  let temp  = match summary with 
+    | [] -> []
+    | x :: xs -> (normalize_effect_a_pair x)  @  (normalize_effect xs) in 
+  let merged = temp in 
+  (* 
+  debug_print ("normalize_effect: " ^ string_of_effect temp); 
+  debug_print ("after merge : " ^ string_of_effect merged); 
+  *)
+  merged
+
+
+
 
 let intersectionTwoInterval (p:pure) (intervalTarget:interval) (interval:interval) : (interval * interval list) = 
   let (iTargetLow, iTargetHigh) =  intervalTarget in
@@ -1026,16 +1079,6 @@ let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) 
   debug_printTraceSubtraction ("res = " ^ string_of_fc res ^ "\n");
   res
 
-
-
-let rec string_of_effect (summary:effect) = 
-
-  let string_of_a_pair (exs, p, re, fc, r, exitCode) = string_of_single_effect (exs, p, re, fc, r, exitCode) in 
-
-  match summary with 
-  | [] -> ""
-  | [x] -> "(" ^ string_of_a_pair x ^ ")"
-  | x :: xs -> "(" ^ string_of_a_pair x  ^ ") \\/ \n    " ^ string_of_effect xs 
 
 
 

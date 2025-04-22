@@ -1105,13 +1105,14 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
               in 
               acc@ extra)
             ~init:[] postProcess in 
+          debug_print("\nPostProcess= " ^ string_of_effect resetErrorCodeEffect);
 
-          let final  = resetErrorCodeEffect in 
 
-          debug_print("\nPostProcess= " ^ string_of_effect final);
+          let final  = state_merging resetErrorCodeEffect in 
+
 
           
-          let final  = checkPostConditionError final parameters fp in 
+          let final  =  (checkPostConditionError final parameters fp) in 
           debug_print("\final= " ^ string_of_effect final);
 
           
