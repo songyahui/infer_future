@@ -5,7 +5,7 @@
     ENS (∃ r : r=unit ; free(ptr) ; (!_(ptr))^* ; r) @*/
 
 /*@ malloc(size) = 
-    REQ size > 0 
+    REQ TRUE
     ENS (∃ l : TRUE ; malloc(l)  ; (!free(l))^* · free(l) ·  (_)^* ; l)  @*/
 
 /*@ return(t) =

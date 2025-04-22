@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-
 #define BUFSIZER1 4
 
 int uaf () {
@@ -16,7 +14,6 @@ int uaf () {
         abrt = 1;
         free(ptr);
     }
-
     if (abrt) {
         printf("operation aborted before commit", ptr);
     }

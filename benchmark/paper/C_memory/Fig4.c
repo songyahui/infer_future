@@ -1,7 +1,5 @@
 #include <stdlib.h>
 
-
-
 struct st {int flag; void *f;};
 
 void *foo(struct st *p) {
@@ -23,7 +21,7 @@ int main() {
   free(q); 
   //Issue 4: double free
   //if (p.flag) 
-  if (p.flag) free(p.f); 
+  free(p.f); 
   return 0; 
 }
 

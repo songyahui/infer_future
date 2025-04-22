@@ -23,7 +23,7 @@ let debug_print str =
   else ()
 
 let debug_printCFunCall str = 
-  if false then debug_print (str)
+  if true then debug_print (str)
   else ()
 
 let debug_printTraceSubtraction str = 
@@ -49,25 +49,34 @@ let debug_checkPostConditionError str =
     else ()
   
 let debug_derivative str = 
-    if true then debug_print (str)
+    if false then debug_print (str)
     else ()
 
 let report_print str = 
-    if true then print_endline (str)
+    if false then print_endline (str)
     else ()
   
     
     
 
 let errormessage = ref ""
+let (errormessageLineNo: (int list) ref) = ref []
 let errormessagecounter = ref 0
 
+let rec existAux f (li:('a list)) (ele:'a) = 
+  match li with 
+  | [] ->  false 
+  | x :: xs -> if f x ele then true else existAux f xs ele
 
-let error_message str = 
-  errormessagecounter := !errormessagecounter + 1 ; 
-  errormessage := !errormessage ^ "\n" ^ string_of_int !errormessagecounter ^  str ^ "\n";
-  if true then print_endline (str)
-  else ()
+
+
+let error_message str fp = 
+  if existAux (fun a b ->  a==b) !errormessageLineNo fp then ()
+  else 
+    (errormessageLineNo := !errormessageLineNo @ [fp]; 
+    errormessagecounter := !errormessagecounter + 1 ; 
+    errormessage := !errormessage ^ "\n" ^ string_of_int !errormessagecounter ^  str ^ "\n";
+    debug_print (str))
   
   
 
@@ -211,10 +220,6 @@ let cartesian_product li1 li2 =
       List.map li2 ~f:(fun l2 -> (l1, l2))))
 
 
-let rec existAux f (li:('a list)) (ele:'a) = 
-  match li with 
-  | [] ->  false 
-  | x :: xs -> if f x ele then true else existAux f xs ele
 
 let intersect f lst1 lst2 =
   List.filter ~f:(fun x -> existAux f lst2 x) lst1
@@ -1071,7 +1076,7 @@ let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) 
     let single_res = trace_subtraction_helper p fc es in 
     (match single_res with 
     | Bot -> 
-      error_message ("\nThe future condition is violated (ST) here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr fc ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
+      error_message ("\nThe future condition is violated (ST) here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr fc ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p) fp;  
     | _ -> ()
     ); 
     
@@ -1425,7 +1430,7 @@ let checkNullableAndPrintErrorMsg fcExists fp p =
   (if List.length falseFCS == 0 
       then ()
       else 
-        error_message ("\nThe future condition is violated (Emp) here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_fc (mergebackFCfromRE falseFCS) ^ "\n  Trace subtracted = 𝝐 " ^ msg))
+        error_message ("\nThe future condition is violated (Emp) here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_fc (mergebackFCfromRE falseFCS) ^ "\n  Trace subtracted = 𝝐 " ^ msg) fp)
 
 
 let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect = 

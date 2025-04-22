@@ -426,12 +426,12 @@ let enforcePure (p:pure) (re:effect) : effect =
 
 
 
-let rec findSpecificationSummaries (f:string) (summaries:summary list) : summary option = 
+let rec findSpecificationSummaries (f:string) (summaries:summary list) (actual_Length:int) : summary option = 
   match summaries with 
   | [] -> None 
   | ((fName, args), preC, re) :: xs  -> 
-    if String.compare fName f ==0 then Some ((fName, args), preC, re)
-    else findSpecificationSummaries f xs 
+    if String.compare fName f ==0 && (List.length args == actual_Length) then Some ((fName, args), preC, re)
+    else findSpecificationSummaries f xs actual_Length
 
 let add_exs exs1 effect : effect = 
   List.map ~f:(fun (exs, p, re, fc, r, errorCode) -> (exs@exs1, p, re, fc, r, errorCode)) effect 
@@ -479,34 +479,6 @@ let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)
   | _ -> substitute_formalArgs_and_exs
 
 
-let renameALLLocalVar(summary:summary) :summary = 
-  
-  (*
-
-  let ((name, old_formal_Args), preCond, effects) = summary in
-
-  let (new_formal_Args:term list) = List.map ~f:(fun a -> Var (verifier_get_A_freeVar a)) old_formal_Args in 
-  let mappings = actual_formal_mappings new_formal_Args old_formal_Args in 
-  let preCond' = substitute_pure preCond mappings in
-  let effects' = substitute_effect effects mappings in 
-
-    let effects'' = List.map ~f:(fun (exs, p, es, fc) -> 
-  ) effects' in 
-*)
-  summary
-
-  (*
-  match preCond with 
-  | Exists (strLi, pIn) -> 
-    let (newEx s:string list) = List.map ~f:(fun a -> verifier_get_A_freeVar (Var a)) strLi in 
-    let string2Term li = (List.map ~f:(fun a -> Var a) li) in   
-    let (exs_mappings : ((term*term)list)) = actual_formal_mappings (string2Term newExs) (string2Term strLi) in 
-    let preCond' =  Exists (newExs, substitute_pure pIn exs_mappings) in 
-    let effects' = substitute_effect effects exs_mappings in 
-    (signature, preCond', effects'), newExs
-  | _ -> summary, []
-  *)
-
   
 
 let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang) : effect = 
@@ -533,16 +505,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let effect1', extensionR = 
       let r = verifier_get_A_freeVar v in 
       substitute_effect effect1 [(Var r, v)], [r]
-      (*
-      (* check if v has occurred before or not *)
-        let allTerms_fromPure = getAllTermsFromPure p in 
-        if existAux (fun t1 t2 -> strict_compare_Term t1 t2 ) allTerms_fromPure v 
-        then (* if yes, then rename it to r *)
-          let r = verifier_get_A_freeVar v in 
-          substitute_effect effect1 [(Var r, v)], [r]
-        else (* if no, just leave it and there is no fresh variable crated  *)
-          effect1, [] 
-      *)
+
     in 
     List.map ~f:(fun (exs, p, re, fc, ret, errorCode) -> (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT, errorCode)) effect1'
     
@@ -559,11 +522,11 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     effect1@effect2
 
   | CFunCall (f, xs, fp) -> 
-    let f_summary = findSpecificationSummaries f !summaries in
+    let f_summary = findSpecificationSummaries f !summaries (List.length xs) in
     (match f_summary with 
     | None -> [state]
     | Some summary -> 
-      let summary = renameALLLocalVar summary in 
+      let summary =  summary in 
       debug_printCFunCall ("current state : " ^ string_of_effect [state]); 
       debug_printCFunCall ("actual args : " ^ string_of_li (fun a-> string_of_term a) xs ","); 
       debug_printCFunCall ("callee spec : " ^ string_of_summary summary); 
@@ -599,7 +562,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     (
     match  decreasingArgumentInference p guard body with 
     | None -> 
-      error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp );
+      error_message("\nLoop Invariants generation failed at line " ^ string_of_int fp ) fp;
       [(exs, p, re, fc, ret, -1)]
     | Some (index, interval) -> 
       let (low, high) = interval in 
@@ -840,27 +803,19 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     in 
     (
     match stmt2Pure condition with
-    | Some conditional_guard -> 
-      
-      CIfELse (conditional_guard, e1, e2, fp)
-    | None -> 
-      
+    
+    | None (* | Some (Eq(TApp _, _)) *) -> 
       let freshVar = verifier_get_A_freeVar UNIT in
 
       let cond_core = convert_AST_to_core_program condition in 
 
       CSeq(CAssign(Var freshVar, cond_core, fp) , 
-        CIfELse (Neg (Eq (Var freshVar, Num 0)) , e1, e2, fp))
+      CIfELse (Neg (Eq (Var freshVar, Num 0)) , e1, e2, fp))
 
-
-            
-            
-
+    | Some conditional_guard -> 
+      
+      CIfELse (conditional_guard, e1, e2, fp)
     )
-
-
-
-
 
   | UnaryOperator (stmt_info, x::_, expr_info, unary_operator_info) ->
     let (fp:int) = stmt_info2FootPrint stmt_info in 
@@ -908,7 +863,17 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `NE 
       | `EQ ->
         let (p:pure) = loop_guard instr in 
-        CIfELse(p, CValue(Num 1, fp), CValue(Num 0, fp), fp)
+        (
+        match p with 
+        | Eq(TApp (op, args), t) ->  
+          let freshVar = verifier_get_A_freeVar UNIT in
+          CSeq(CAssign(Var freshVar, CFunCall(op, args, fp), fp) , 
+          
+          CIfELse(Eq(Var freshVar, t), CValue(Num 1, fp), CValue(Num 0, fp), fp))
+        | _ -> CIfELse(p, CValue(Num 1, fp), CValue(Num 0, fp), fp)
+
+
+        )
 
 
  
@@ -1343,6 +1308,14 @@ let rec print_out_the_inferred_specifications summaries num : unit =
   (* List.iter ~f:(fun a -> report_print (string_of_summary a))  left;  *)
   List.iter ~f:(fun a -> report_print (string_of_summary a))  right
 
+let rec sublist (b:int) (e:int) l = 
+  match l with
+  | [] -> []
+  | h :: t -> 
+     let tail = if e==0 then [] else sublist (b-1) (e-1) t in
+     if b>0 then tail else h :: tail
+
+
 
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
   verifier_counter_reset_to 0; 
@@ -1358,7 +1331,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   *)
   current_source_file := source_file ; 
 
-  print_endline ("File analysed : \"" ^ source_file ^ "\"\n");  
+  debug_print ("File analysed : \"" ^ source_file ^ "\"\n");  
 
   let source_file_root = "/" ^ Filename.dirname source_file ^ "/spec.c" in 
 
@@ -1390,7 +1363,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   let () = finalReport := !finalReport ^ msg ^ !errormessage in 
   let dirName = "/infer-term" in 
   let path = Sys.getcwd()  (* "/Users/yahuis/Desktop/git/infer_termination/" *) in 
-  print_endline (Sys.getcwd());
+
 
   create_newdir (path ^ dirName); 
 
@@ -1418,13 +1391,12 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
     ["Report File"; path ^ dirName ^ "/detail.txt" ];
   ]
   in 
-  print_table ~headers:["Summary"; ""]
-  table;
+  print_table ~headers:["Summary"; ""] table;
 
   List.iter ~f:(fun li -> 
     match li with 
     | [_;b] -> print_string (b  ^ ",") ; 
-    | _ -> ()) table; 
+    | _ -> ()) (sublist 0 5 table); 
 
   ()
 
