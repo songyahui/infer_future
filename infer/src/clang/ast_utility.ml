@@ -40,12 +40,12 @@ let debug_postprocess str =
     else ()
 
 let debug_Inv_Infer str = 
-    if false then debug_print (str)
+    if true then debug_print (str)
     else ()
   
 
 let debug_checkPostConditionError str = 
-    if true then debug_print (str)
+    if false then debug_print (str)
     else ()
   
 let debug_derivative str = 
@@ -137,7 +137,8 @@ type literal = string * (core_value list)
 type event = 
   | Pos of literal 
   | Neg of literal  
-  | NegTerm of term list | ANY 
+  | NegTerm of term list 
+  | ANY 
   | Bag of interval * integratedSpec
   
 and integratedSpec = ((pure * regularExpr) list)
@@ -294,8 +295,8 @@ let rec string_of_pure (p:pure):string =
   | GtEq (t1, t2) -> (string_of_term t1) ^ ">=" ^ (string_of_term t2) (*"≥"*)
   | LtEq (t1, t2) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2) (*"≤"*)
   | Eq (t1, t2) -> (string_of_term t1) ^ "=" ^ (string_of_term t2)
-  | PureOr (p1, p2) -> "("^string_of_pure p1 ^ "∨" ^ string_of_pure p2^")"
-  | PureAnd (p1, p2) -> string_of_pure p1 ^ "∧ " ^ string_of_pure p2 
+  | PureOr (p1, p2) -> "("^string_of_pure p1 ^ " ∨ " ^ string_of_pure p2^")"
+  | PureAnd (p1, p2) -> string_of_pure p1 ^ "∧" ^ string_of_pure p2 
   | Neg (Eq (t1, t2)) -> (string_of_term t1) ^ "!=" ^ (string_of_term t2)
   | Neg (Gt (t1, t2)) -> (string_of_term t1) ^ "<=" ^ (string_of_term t2)
   | Neg p -> "!(" ^ string_of_pure p^")"
@@ -979,7 +980,8 @@ match ev with
       Conjunction(temp, Singleton (Bag(newInterval3, deriIntegrated)))
 
     | _ -> 
-      debug_print ("I am not too sure derivativeEvent 1"); 
+      debug_print ("I am not too sure derivativeEvent 1" );
+      debug_print ("ev = " ^ string_of_event ev ^ "\nevTarget="^ string_of_event evTarget);
       Singleton evTarget
     
     )
@@ -1041,7 +1043,10 @@ match ev with
 and trace_subtraction_helper (p:pure) (fc: regularExpr) (es:regularExpr) : futureCond = 
   let fc = normalize_es fc in 
   let es = normalize_es es in 
-  match es with 
+  match fc with 
+  | (Kleene (Singleton ANY)) -> fc
+  | _ -> 
+  (match es with 
   | Emp -> fc 
   | Bot -> Bot 
   | _ -> 
@@ -1055,7 +1060,7 @@ and trace_subtraction_helper (p:pure) (fc: regularExpr) (es:regularExpr) : futur
     let res = normalize_es res  in 
     (* debug_print ("trace_subtraction_single: " ^ string_of_regularExpr fc ^ " - " ^ string_of_regularExpr es ^ " ~~> "^ string_of_regularExpr res);
      *)
-    res
+    res)
 
 
 let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) (fp:int): futureCond =
@@ -1069,7 +1074,7 @@ let trace_subtraction (lhsP:pure) (rhsP:pure) (fc: futureCond) (es:regularExpr) 
     let single_res = trace_subtraction_helper p fc es in 
     (match single_res with 
     | Bot -> 
-      error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr fc ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
+      error_message ("\nThe future condition is violated (ST) here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_regularExpr fc ^ "\n  Trace subtracted = " ^ string_of_regularExpr es ^ "\n  Pure =  " ^ string_of_pure p);  
     | _ -> ()
     ); 
     
@@ -1412,6 +1417,19 @@ let decompositeFCByForallExists (fc:futureCond) (forallVar:term list): (futureCo
   
   ;;
 
+let checkNullableAndPrintErrorMsg fcExists fp p = 
+  let msg = 
+    match p with 
+    | TRUE -> ""
+    | _ -> "\n  Pure =  " ^ string_of_pure p
+  in  
+  let fcs = decomposeteFCtoRE fcExists in 
+  let falseFCS = List.filter ~f:(fun a -> if nullable a then false else true ) fcs in 
+  (if List.length falseFCS == 0 
+      then ()
+      else 
+        error_message ("\nThe future condition is violated (Emp) here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_fc (mergebackFCfromRE falseFCS) ^ "\n  Trace subtracted = 𝝐 " ^ msg))
+
 
 let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect = 
   let aux ((exs, p, re, fc, r, exitCode):singleEffect) : singleEffect option = 
@@ -1422,10 +1440,7 @@ let checkPostConditionError (eff:effect) (formalArgs:term list) (fp:int): effect
       let fcForall, fcExists = decompositeFCByForallExists fc inputOutputTerms in 
       debug_checkPostConditionError("fcForall = " ^ string_of_fc fcForall);
       debug_checkPostConditionError("fcExists = " ^ string_of_fc fcExists); 
-      (if nullable fcExists 
-      then ()
-      else 
-        error_message ("\nThe future condition is violated here at line " ^ string_of_int fp ^ "\n  Future condition is = " ^ string_of_fc fcExists ^ "\n  Trace subtracted = 𝝐 " ^ "\n  Pure =  " ^ string_of_pure p));  
+      checkNullableAndPrintErrorMsg fcExists fp p; 
 
       (match fcForall with
       | Bot -> None 
@@ -1461,8 +1476,17 @@ let getInterval pure guard : (interval * pure) option =
     else None  
   | _ -> None 
 
+let checkIfPredicateIsOnArrayEle (bagtrace:((pure * regularExpr)list)) (bagFC:((pure * regularExpr)list)) (arrHandlers:term list) inv' fp = 
+  let (terms:term list) = flattenList (List.map ~f:(fun (_, es) -> getAllTermsFromRE es) bagFC) in 
+  debug_print (string_of_list_terms (terms) ^ " ?=? " ^ string_of_list_terms arrHandlers);
+  if has_overlap strict_compare_Term arrHandlers terms then true 
+  else 
+    (checkNullableAndPrintErrorMsg (Singleton (Bag(inv', bagFC))) fp TRUE; 
+    false )
 
-let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr * futureCond) = 
+
+
+let invariantInference(inv:interval) (body:effect) (arrHandlers:term list) fp: (regularExpr * futureCond) = 
   let body = postProcess body in 
 
   invariantInference_counter := !invariantInference_counter + 1; 
@@ -1472,8 +1496,10 @@ let invariantInference (index:term) (inv:interval) (body:effect) : (regularExpr 
   let inv' = inv in 
   let (bagtrace:((pure * regularExpr)list)) = List.map ~f:(fun (_, p, es, _, _, _) -> (p, es)) body in 
   let (bagFC:((pure * regularExpr)list)) = (List.map ~f:(fun (_, p, _, fc , _, _) -> (p, fc)) body) in 
-  Singleton (Bag(inv', bagtrace)), (Singleton (Bag(inv', bagFC))
-)
+  if checkIfPredicateIsOnArrayEle bagtrace bagFC arrHandlers inv' fp then 
+    Singleton (Bag(inv', bagtrace)), (Singleton (Bag(inv', bagFC)))
+  else Singleton (Bag(inv', bagtrace)), fc_default
+
 
 
 let rec mutableTermCoreLang (stmts:core_lang) : term list = 
@@ -1483,15 +1509,16 @@ let rec mutableTermCoreLang (stmts:core_lang) : term list =
   | CSeq (e1, e2) -> mutableTermCoreLang e1 @ mutableTermCoreLang e2 
   | _ -> []
 
-let rec removeNonArrayAssignment (stmts:core_lang) : (core_lang) =  
+let rec removeNonArrayAssignment (stmts:core_lang) (decricing: term): (core_lang) =  
   match stmts with 
   | CAssign (Member (t, _), e, fp) -> stmts
     (* remove the index, just use the t *)
-  | CAssign (_, e, fp) -> CSkip fp
+  | CAssign (x, e, fp) -> 
+    if strict_compare_Term x decricing then CSkip fp else stmts
   | CIfELse (b, e1, e2, fp) -> 
-    CIfELse (b, removeNonArrayAssignment e1, removeNonArrayAssignment e2, fp)
+    CIfELse (b, removeNonArrayAssignment e1 decricing, removeNonArrayAssignment e2 decricing, fp)
 
-  | CSeq (e1, e2) -> CSeq (removeNonArrayAssignment e1, removeNonArrayAssignment e2)
+  | CSeq (e1, e2) -> CSeq (removeNonArrayAssignment e1 decricing, removeNonArrayAssignment e2 decricing)
   | _ -> stmts
 
 let rec getArrayHandlerMappingsPure (p:pure) : (term * term) list = 

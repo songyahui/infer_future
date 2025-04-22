@@ -22,7 +22,7 @@ void create_leaky_connection(int port) {
         // Intentionally not closing sock here to simulate leak
         return;
     }
-    close (sock);
+    // close (sock);
     // Normally should close(sock) here, but intentionally omitted
 }
 
