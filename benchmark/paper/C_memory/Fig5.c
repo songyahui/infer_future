@@ -15,6 +15,6 @@ void mallocN (void **arr, int n) {
 int main () {
   void *array[5];
   mallocN (array, 5); 
-  free(array[0]);
+  free(array[0]); // memory leak 
 }
 //./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'

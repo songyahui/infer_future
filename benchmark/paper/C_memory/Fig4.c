@@ -21,7 +21,7 @@ int main() {
   free(q); 
   //Issue 4: double free
   //if (p.flag) 
-  free(p.f); 
+  free(p.f);  // double free
   return 0; 
 }
 
@@ -32,7 +32,7 @@ int test(void* q) {
 
 int test1() {
   void* q = malloc(1);
-  return 1; 
+  return 1;  // memory leak 
 }
 
 //./infer/bin/infer run --pulse-only -- clang++ -c  '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/Fig4.c'

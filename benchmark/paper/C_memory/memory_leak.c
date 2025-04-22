@@ -6,7 +6,7 @@ int test(int argc, char *argv[]) {
     int i, length; 
     i = 0;    
     length = 0;
-    while (i<argc) {
+    while (i<argc) { // 1.  memory leak 
         length += strlen(argv[i])+1;
         string = malloc(1);
  
@@ -19,7 +19,7 @@ int test(int argc, char *argv[]) {
          
         string_so_far = string; 
         i = i + 1; 
-    }
+    } 
     printf("You entered: %s\n", string_so_far);
     return (0);
 }
@@ -61,7 +61,7 @@ int test2(int argc, char *argv[]) {
  
          
         string_so_far = string; 
-        free(string_so_far);
+        free(string_so_far); 
         i = i + 1; 
     }
     printf("You entered: %s\n", string_so_far);
@@ -73,7 +73,7 @@ int test3(int argc, char *argv[]) {
     int i, length; 
     i = 0;    
     length = 0;
-    while (i<argc) {
+    while (i<argc) { // 2.  memory leak 
         length += strlen(argv[i])+1;
         string = malloc(1);
         /*  * Copy the string built so far. */ 
@@ -84,7 +84,7 @@ int test3(int argc, char *argv[]) {
         if (i < argc-1) strcat(string, " "); 
          
         string_so_far = string; 
-        free(string_so_far);
+        free(string_so_far); 
 
         i = i + 1; 
     }
@@ -97,6 +97,6 @@ void main() {
     string = malloc(1);
     string_so_far = string; 
     free(string_so_far);
-    printf("You entered: %s\n", string);
+    printf("You entered: %s\n", string); // 3.  use after free 
 }
 

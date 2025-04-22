@@ -53,4 +53,5 @@ int main(int argc, char **argv)
         }
 
 }
-// one 
+// one memory leak at line 55 
+// one use after free at line 49

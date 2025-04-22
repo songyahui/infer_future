@@ -15,9 +15,9 @@ int uaf () {
         free(ptr);
     }
     if (abrt) {
-        printf("operation aborted before commit", ptr);
+        printf("operation aborted before commit", ptr); // 1 use after free 
     }
-}
+} // 2 memory leak 
 
 
 int main(int argc, char **argv) {
@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     free(buf2R1);
     buf2R2 = (char *) malloc(BUFSIZER1);
     buf3R2 = (char *) malloc(BUFSIZER1);
-    strncpy(buf2R1, argv[1], BUFSIZER1); // Use-after-free
+    strncpy(buf2R1, argv[1], BUFSIZER1); // 3, Use-after-free
     free(buf1R1); free(buf2R2); free(buf3R2);
 }
 
@@ -37,5 +37,5 @@ int paper(int argc, char **argv) {
     buf2R1 = (char *) malloc(1);
     free(buf2R1); // free buf2R1
     buf2R2 = (char *) malloc(1);
-    strncpy(buf2R1,argv[1],1); //UAF
+    strncpy(buf2R1,argv[1],1); //4. UAF
     free(buf1R1); free(buf2R2); }
