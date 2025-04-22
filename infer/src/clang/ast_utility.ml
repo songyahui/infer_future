@@ -40,7 +40,7 @@ let debug_postprocess str =
     else ()
 
 let debug_Inv_Infer str = 
-    if true then debug_print (str)
+    if false then debug_print (str)
     else ()
   
 
@@ -49,7 +49,7 @@ let debug_checkPostConditionError str =
     else ()
   
 let debug_derivative str = 
-    if false then debug_print (str)
+    if true then debug_print (str)
     else ()
 
 let report_print str = 
@@ -922,9 +922,6 @@ let rec derivative (p:pure) (ev:firstEle) (re:regularExpr) : regularExpr =
 and derivativeIntegratedSpecEvent (contextP:pure) (spec:regularExpr) (specTarget:integratedSpec) : integratedSpec = 
   List.map ~f:(fun (pureT, esT) -> 
     (pureT, normalize_es (trace_subtraction_helper contextP esT spec))
-    
-    
-
   )  specTarget
 
 and derivativeIntegratedSpec (contextP:pure) (spec:integratedSpec) (specTarget:integratedSpec) : integratedSpec = 
