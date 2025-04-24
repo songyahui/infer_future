@@ -1596,4 +1596,4 @@ let decreasingArgumentInference (pState:pure) (guard:pure) (body:core_lang) : (t
   
   
 let termOption2TermLi (temp: (term option) list) : term list = 
-    List.fold_left ~f:(fun acc a -> match a with | Some a -> acc@[a] | None -> acc) ~init:[] temp
+    List.fold_left ~f:(fun acc a -> match a with | Some a -> acc@[a] | None -> acc@[Nil]) ~init:[] temp

@@ -633,41 +633,9 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
 
 
-let rec extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt list) : event option = 
-(match x with
-| DeclRefExpr (stmt_info, _, _, decl_ref_expr_info) -> 
-  let (sl1, sl2) = stmt_info.si_source_range in 
-  let (lineLoc:int option) = sl1.sl_line in 
-
-  (match decl_ref_expr_info.drti_decl_ref with 
-  | None -> None  
-  | Some decl_ref ->
-    (
-    match decl_ref.dr_name with 
-    | None -> None 
-    | Some named_decl_info -> 
-      Some (Pos (named_decl_info.ni_name, (termOption2TermLi (List.map rest ~f:stmt2Term))))
-    )
-  )
-
-| ImplicitCastExpr (_, stmtLi, _, _, _) ->
-  (match stmtLi with 
-  | [] -> None 
-  | y :: restY -> extractEventFromFUnctionCall y rest)
-
-| BinaryOperator (_, x::_, _, _)
-| ParenExpr (_, x::_, _) -> extractEventFromFUnctionCall x rest
-| (CallExpr (_, stmtLi, _)) -> 
-  (match stmtLi with 
-  | [] -> None 
-  | x::rest -> extractEventFromFUnctionCall x rest
-  )
-
-| _ -> 
-  None 
-)
 
 
+(*
 let rec createIntermediateValue4execution (li:term list) state : ((core_lang list) * (term list)) = 
   match li with 
   | [] -> [], []
@@ -684,6 +652,8 @@ let rec createIntermediateValue4execution (li:term list) state : ((core_lang lis
     let cl2, tLi2  = (createIntermediateValue4execution xs state) in 
     cl1@cl2, tLi1@tLi2
 
+
+*)
 
 
 
@@ -772,6 +742,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     (match stmt2Term x, stmt2Term y with 
     |  Some t1 ,  Some t2 -> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
+    | _, _ -> CSkip(fp)
 
 
     )
@@ -966,7 +937,18 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     )
 
-  | MemberExpr (stmt_info, arLi, _, member_expr_info)  -> 
+  | ArraySubscriptExpr (stmt_info, arLi, member_expr_info) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
+    (match temp with 
+    | [] -> CValue (Nil, fp) 
+    | [Some x] -> CValue (x, fp) 
+    | Some x :: xs -> CValue (Member (x, termOption2TermLi xs) , fp) 
+    | _ -> CSkip fp
+    )
+    
+  | MemberExpr (stmt_info, arLi, _,member_expr_info)  -> 
+
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     let memArg = member_expr_info.mei_name.ni_name in 
     let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
@@ -1049,7 +1031,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | CallExpr (stmt_info, x ::rest, ei) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     (match extractEventFromFUnctionCall x rest with 
-    | Some (Pos(calleeName, actualLi)) -> (* arli is the actual argument *)
+    | Some (Pos(calleeName, actualLi), extraCoreLang) -> (* arli is the actual argument *)
       (if String.compare calleeName "assumeF" == 0 && List.length actualLi > 0 then 
         (match actualLi with 
           | (Str str) :: _ -> 
@@ -1060,8 +1042,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
           | _  ->  CAssumeF(fc_default) 
         )
       else 
-        let prefixCmds, actualLi' = createIntermediateValue4execution actualLi fp in 
-        sequentialComposingListStmt (prefixCmds@[(CFunCall(calleeName, actualLi', fp))]) fp)
+        (*let prefixCmds, actualLi' = createIntermediateValue4execution actualLi fp in *)
+        sequentialComposingListStmt (extraCoreLang@[(CFunCall(calleeName, actualLi, fp))]) fp)
     | _ -> 
         let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
     )
@@ -1082,6 +1064,56 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
 
 
+and extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt list) : (event * core_lang list ) option = 
+    (match x with
+    | DeclRefExpr (stmt_info, _, _, decl_ref_expr_info) -> 
+      let (sl1, sl2) = stmt_info.si_source_range in 
+      let (fp:int) = stmt_info2FootPrint stmt_info in 
+    
+      (match decl_ref_expr_info.drti_decl_ref with 
+      | None -> None  
+      | Some decl_ref ->
+        (
+        match decl_ref.dr_name with 
+        | None -> None 
+        | Some named_decl_info -> 
+          let coreLang, termLi =  
+            List.fold_left ~f:(fun (accL, acctL) term -> 
+              match stmt2Term term with 
+              | Some t  -> (accL, acctL@[t]) 
+              | None -> 
+                let coreLangTerm = convert_AST_to_core_program term in 
+                let freshVar = verifier_get_A_freeVar UNIT in
+                let accL' = accL@ [CAssign(Var freshVar, coreLangTerm, fp)] in 
+                (accL', acctL@[Var freshVar])
+          
+
+            
+            ) ~init:([], []) rest 
+          in 
+
+
+          Some (Pos (named_decl_info.ni_name, termLi), coreLang)
+        )
+      )
+    
+    | ImplicitCastExpr (_, stmtLi, _, _, _) ->
+      (match stmtLi with 
+      | [] -> None 
+      | y :: restY -> extractEventFromFUnctionCall y rest)
+    
+    | BinaryOperator (_, x::_, _, _)
+    | ParenExpr (_, x::_, _) -> extractEventFromFUnctionCall x rest
+    | (CallExpr (_, stmtLi, _)) -> 
+      (match stmtLi with 
+      | [] -> None 
+      | x::rest -> extractEventFromFUnctionCall x rest
+      )
+    
+    | _ -> 
+      None 
+    )
+    
 let vardecl2String_with_type (dec: Clang_ast_t.decl): (string * (string list * pure) option)  = 
   match dec with 
   | VarDecl (decl_info,  named_decl_info,  qual_type , var_decl_info)
