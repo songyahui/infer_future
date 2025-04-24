@@ -51,3 +51,23 @@ int main(int argc, char **argv)
 }
 // one memory leak at line 55 
 // one use after free at line 49
+
+int test()
+{
+    int *ptr = malloc(sizeof(int));
+    *ptr = 42;
+    free(ptr);
+    *ptr = 10;  // UAF vulnerability
+    return 0;
+}
+
+
+
+int test1()
+{
+    int *ptr = malloc(sizeof(int));
+    *ptr = 42;
+    free(ptr);
+    ptr = NULL;  // set ptr to NULL to prevent use after free
+    return 0;
+}

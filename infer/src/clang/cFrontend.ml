@@ -524,7 +524,12 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       substitute_effect effect1 [(Var r, v)], [r]
 
     in 
-    List.map ~f:(fun (exs, p, re, fc, ret, errorCode) -> (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT, errorCode)) effect1'
+    let ev = Pos ("a", [v]) in 
+    flattenList (List.map ~f:(fun (exs, p, re, fc, ret, errorCode) -> 
+      let state' = (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT, errorCode) in 
+      compose_effects state' ([([], TRUE, Singleton(ev) , fc_default, ret, errorCode)]) fp
+    ) effect1' )
+    
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret, errorCode)]
 

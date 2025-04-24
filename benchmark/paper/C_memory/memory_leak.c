@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 int test(int argc, char *argv[]) {
     char *string, *string_so_far;
     int i, length; 
@@ -100,3 +101,30 @@ void main() {
     printf("You entered: %s\n", string); // 3.  use after free 
 }
 
+
+
+
+void leakMemory() {
+
+    char *ptr = (char*)malloc(10 * sizeof(char)); // Memory is allocated
+
+    // some application logic executes here using the allocated memory
+
+    // Missing free() call when memory is no longer needed, leading to memory leak
+    // 4. memory leak 
+
+}
+
+int main1() {
+
+    for(int i = 0; i < 1000; i++) {
+
+        leakMemory();
+
+    }
+
+    // The allocated memory in leakMemory is never freed.
+
+    return 0;
+
+}
