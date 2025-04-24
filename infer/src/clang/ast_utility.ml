@@ -49,7 +49,7 @@ let debug_checkPostConditionError str =
     else ()
   
 let debug_derivative str = 
-    if true then debug_print (str)
+    if false then debug_print (str)
     else ()
 
 let report_print str = 
@@ -1595,3 +1595,5 @@ let decreasingArgumentInference (pState:pure) (guard:pure) (body:core_lang) : (t
   | li -> helper li guard
   
   
+let termOption2TermLi (temp: (term option) list) : term list = 
+    List.fold_left ~f:(fun acc a -> match a with | Some a -> acc@[a] | None -> acc) ~init:[] temp

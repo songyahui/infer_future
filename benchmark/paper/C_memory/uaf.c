@@ -12,11 +12,13 @@ struct auth {
         int auth;
 };
 
-struct auth *auth;
-char *service;
+
 
 int main(int argc, char **argv)
 {
+        struct auth *auth;
+        
+        char *service;
         char line[128];
         int a, b, c, d, e, f, g, n; 
 
@@ -39,8 +41,7 @@ int main(int argc, char **argv)
                         service = strdup(line + 7);
                 }
                 if(strncmp(line, "login", 5) == 0) {
-                        int t = auth->auth; 
-                        if(t) {
+                        if(auth->auth) {
                                 printf("you have logged in already!\n");
                         } else {
                                 printf("please enter your password\n");

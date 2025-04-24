@@ -92,20 +92,23 @@ let string_of_binary_operator (binary_operator_kind:Clang_ast_t.binary_operator_
 
 
 
-let stmt2Term_helper (op: Clang_ast_t.binary_operator_info) (t1: term) (t2: term) : term = 
-  (match op.boi_kind with 
-  | `Add ->  (Plus (t1, t2))
-  | `Sub ->  (Minus (t1, t2))
-  | `Mul ->  (TTimes (t1, t2))
-  | `Div->  (TDiv (t1, t2))
-  | _ -> (TApp("stmt2Term_helper", [Var (string_of_binary_operator (op))])) 
-  )
+let stmt2Term_helper (op: Clang_ast_t.binary_operator_info) (t1: term option) (t2: term option) : term option= 
+  match (t1, t2) with 
+  | Some t1 , Some t2  -> 
+    ((match op.boi_kind with 
+    | `Add ->  Some (Plus (t1, t2))
+    | `Sub ->  Some (Minus (t1, t2))
+    | `Mul ->  Some (TTimes (t1, t2))
+    | `Div->  Some (TDiv (t1, t2))
+    | _ -> None 
+    ))
+  | _ -> None 
     
 
 
     
 
-let rec stmt2Term (instr: Clang_ast_t.stmt) : term = 
+let rec stmt2Term (instr: Clang_ast_t.stmt) : term option = 
   (*print_endline ("term kind:" ^ Clang_ast_proj.get_stmt_kind_string instr);*)
   match instr with 
   | ImplicitCastExpr (_, x::rest, _, _, _) 
@@ -113,10 +116,6 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
   | UnaryExprOrTypeTraitExpr(_, x::rest, _, _) 
   | CStyleCastExpr (_, x::rest, _, _, _) 
   | ParenExpr (_, x::rest, _) -> 
-  (*print_string ("ParenExpr/CStyleCastExpr: " ^ (
-    List.fold_left (x::rest) ~init:"" ~f:(fun acc a -> acc ^ "," ^ Clang_ast_proj.get_stmt_kind_string a)
-  )^ "\n");
-  *)
 
     stmt2Term x
   
@@ -125,8 +124,8 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
   | IntegerLiteral (_, stmtLi, expr_info, integer_literal_info) ->
     let int_str = integer_literal_info.ili_value in 
 
-    if String.length int_str > 18 then ((Var "SYH_BIGINT"))
-    else ((Num (int_of_string(int_str))))
+    if String.length int_str > 18 then None 
+    else Some ((Num (int_of_string(int_str))))
       (*Some ((Num (int_of_string(int_str))))*)
     
   | DeclRefExpr (stmt_info, _, expr_info, decl_ref_expr_info) -> 
@@ -134,50 +133,56 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
 
     (match decl_ref_expr_info.drti_decl_ref with 
     | None -> 
-     ((Var(Clang_ast_proj.get_stmt_kind_string instr ^"(!!!stmt2Term, DeclRefExpr)"))) 
+      print_endline ("(!!!stmt2Term, DeclRefExpr)");
+      None 
+      
     | Some decl_ref ->
       (
       match decl_ref.dr_name with 
-      | None -> ((Var(Clang_ast_proj.get_stmt_kind_string instr ^"(!!!stmt2Term, DeclRefExpr2)"))) 
+      | None -> 
+        print_endline ("(!!!stmt2Term, DeclRefExpr2)");
+        None 
       | Some named_decl_info -> 
         let c_type = CAst_utils.get_type expr_info.ei_qual_type.qt_type_ptr in 
         
         (match c_type with 
-          | Some (PointerType _) -> (((* Pointer *) Var (named_decl_info.ni_name)))
+          | Some (PointerType _) -> Some (((* Pointer *) Var (named_decl_info.ni_name)))
             
-          | _ -> ((Var (named_decl_info.ni_name)))
+          | _ -> Some ((Var (named_decl_info.ni_name)))
 
         )
         
       
       )
     )
-  | NullStmt _ -> (Nil)
+  | NullStmt _ -> Some (Nil)
 
   | ArraySubscriptExpr (_, arLi, _)  -> 
 
     let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
     (match temp with 
-    | [] -> Nil 
+    | [] -> Some Nil 
     | [x] -> x 
-    | x :: xs -> Member (x, xs)
+    | x :: xs -> None (* Member (x, xs) *)
     )
 
 
-  | MemberExpr (_, arLi, _, member_expr_info)  -> 
+  | MemberExpr (_, arLi, _, member_expr_info)  -> None 
+    (*
     let memArg = member_expr_info.mei_name.ni_name in 
     let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
 
     let name  = string_with_seperator (fun a ->(string_of_term a)) temp "." in 
     if String.compare memArg "" == 0 then ((Var(name )))
     else ((Member(Var name, [Var memArg])))
+    *)
 
 
   | UnaryOperator (stmt_info, x::_, expr_info, op_info) ->
     (match op_info.uoi_kind with
     | `Minus -> 
       (match stmt2Term x with 
-      | ( (Num t)) -> ((Num (0-t)))
+      | (Some  (Num t)) -> (Some (Num (0-t)))
       | _ -> 
         stmt2Term x
 
@@ -188,21 +193,24 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term =
     )
    
 
-  | RecoveryExpr (_, [], _) -> ((Num(0))) 
+  | RecoveryExpr (_, [], _) -> Some ((Num(0))) 
     
 
   | ConditionalOperator (_, x::y::_, _) -> stmt2Term y 
-  | StringLiteral (_, _, _, x::_)-> ((Str x)) 
-  | CharacterLiteral _ -> ((Str "char")) 
+  | StringLiteral (_, _, _, x::_)-> Some ((Str x)) 
+  | CharacterLiteral _ -> Some ((Str "char")) 
 
-  | CallExpr (_, stmtLi, ei) -> 
-    (match stmtLi with
+  | CallExpr (_, stmtLi, ei) -> None 
+    (*match stmtLi with
     | [] -> assert false 
     | x :: rest -> 
     ((TApp(string_of_stmt x, List.map rest ~f:(fun a -> stmt2Term a))))  
-    )
+    *)
 
-  | _ -> ((Var(Clang_ast_proj.get_stmt_kind_string instr ^"(!!!stmt2Term)"))) 
+  | _ -> 
+    print_endline (Clang_ast_proj.get_stmt_kind_string instr ^"(!!!stmt2Term)");
+    None
+
 
 
 and string_of_decl (dec :Clang_ast_t.decl) : string = 
@@ -229,6 +237,8 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
   | [x] -> string_of_decl  x 
   | x::xs -> string_of_decl  x ^ sep ^ helper_decl xs sep
   in 
+
+
 (*
   let rec helper li sep = 
     match li with 
@@ -244,13 +254,13 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
   | ArraySubscriptExpr (_, arLi, _)  -> 
     let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
     (*print_endline (string_of_int (List.length temp)); *)
-    string_with_seperator  (fun t -> (string_of_term t)) temp "."
+    string_with_seperator  (fun t -> (string_of_term t)) (termOption2TermLi temp) "."
 
   | MemberExpr (_, arLi, _, member_expr_info)  -> 
     let memArg = member_expr_info.mei_name.ni_name in 
     let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
 
-    let name  = string_with_seperator string_of_term temp "." in 
+    let name  = string_with_seperator string_of_term (termOption2TermLi temp) "." in 
     if String.compare memArg "" == 0 then name 
     else name ^ "." ^ memArg
 
@@ -326,17 +336,20 @@ and string_of_stmt (instr: Clang_ast_t.stmt) : string =
 
 
 
-let stmt2Pure_helper (op: string) (t1: term) (t2: term) : pure option = 
+let stmt2Pure_helper (op: string) (t1: term option) (t2: term option ) : pure option = 
+  match t1, t2 with 
+  | Some t1, Some t2 -> 
 
-  let p = 
-      if String.compare op "<" == 0 then Lt (t1, t2)
-    else if String.compare op ">" == 0 then Gt (t1, t2)
-    else if String.compare op ">=" == 0 then GtEq (t1, t2)
-    else if String.compare op "<=" == 0 then LtEq (t1, t2)
-    else if String.compare op "!=" == 0 then Neg (Eq (t1, t2))
+    let p = 
+        if String.compare op "<" == 0 then Lt (t1, t2)
+      else if String.compare op ">" == 0 then Gt (t1, t2)
+      else if String.compare op ">=" == 0 then GtEq (t1, t2)
+      else if String.compare op "<=" == 0 then LtEq (t1, t2)
+      else if String.compare op "!=" == 0 then Neg (Eq (t1, t2))
 
-    else Eq (t1, t2)
-  in Some p 
+      else Eq (t1, t2)
+    in Some p 
+  | _ -> None
 
 
 
@@ -377,19 +390,21 @@ let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option =
       | Some p -> Some (Neg p))
     | `LNot -> 
       (match stmt2Term x with 
-      |  t -> Some (Eq(t, (Num 0)))
+      |  Some t -> Some (Eq(t, (Num 0)))
+      | None -> None 
       )
       
     | _ -> 
       None
     )
   | ParenExpr (_, x::rest, _) -> stmt2Pure x
-  | MemberExpr _ -> 
-    (match stmt2Term instr with 
-    |  t -> Some (Gt (t, (Num 0))) )
+  | MemberExpr _ -> None 
+    (*match stmt2Term instr with 
+    |  t -> Some (Gt (t, (Num 0))) *)
   | DeclRefExpr _ -> 
     (match stmt2Term instr with 
-    |  t -> Some (Neg(Eq(t, (Num 0))))
+    |  Some t -> Some (Neg(Eq(t, (Num 0))))
+    | None -> None 
     )
 
   | IntegerLiteral _ -> 
@@ -631,7 +646,7 @@ let rec extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt
     match decl_ref.dr_name with 
     | None -> None 
     | Some named_decl_info -> 
-      Some (Pos (named_decl_info.ni_name, ((List.map rest ~f:stmt2Term))))
+      Some (Pos (named_decl_info.ni_name, (termOption2TermLi (List.map rest ~f:stmt2Term))))
     )
   )
 
@@ -743,8 +758,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     (
     match terms with
     | [] -> (CFunCall("return", [UNIT], fp))
-    | x :: _ -> (CFunCall("return", [x], fp))
-    | _ -> (CFunCall("return", [TList(terms)], fp))
+    | Some x :: _ -> (CFunCall("return", [x], fp))
+    | _ -> (CFunCall("return", [TList(termOption2TermLi terms)], fp))
     )
 
     
@@ -756,7 +771,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | CompoundAssignOperator (stmt_info, x::y::_, _, _, _) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     (match stmt2Term x, stmt2Term y with 
-    |  t1 ,  t2 -> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
+    |  Some t1 ,  Some t2 -> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
+
 
     )
        
@@ -828,10 +844,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | UnaryOperator (stmt_info, x::_, expr_info, unary_operator_info) ->
     let (fp:int) = stmt_info2FootPrint stmt_info in 
-    let varFromX = stmt2Term x 
-    in 
-    
-    let (e:core_lang) = 
+    (match stmt2Term x with 
+    | Some varFromX -> 
       (match unary_operator_info.uoi_kind with
       | `PreInc 
       | `PostInc -> CAssign(varFromX, CValue (Plus(varFromX, Num 1), fp), fp)
@@ -852,7 +866,11 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
         print_endline (string_of_unary_operator_info unary_operator_info); 
         CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)], fp)) 
       )
-    in e 
+      
+    | None -> 
+      print_endline (string_of_unary_operator_info unary_operator_info); 
+      CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)], fp)) 
+    )
 
   | BinaryOperator (stmt_info, [x], _, binop_info)->
     convert_AST_to_core_program x
@@ -860,8 +878,22 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
   | BinaryOperator (stmt_info, x::y::_, _, binop_info)->
     let (fp:int) = stmt_info2FootPrint stmt_info in 
 
+    let getOp (v1:term) (v2:term) : pure = 
+      match binop_info.boi_kind with
+      | `LT -> (Lt( v1,  v2))
+      | `GT -> (Gt( v1,  v2))
+      | `GE -> (GtEq( v1,  v2))
+      | `LE -> (Lt( v1,  v2))
+      | `EQ -> (Eq( v1,  v2))
+      | `NE -> Neg (Eq( v1,  v2))
+      | _ -> TRUE
+    in 
+
+
+
     (match stmt2Term x, stmt2Term y with 
-    |  t1 ,  t2 -> 
+  
+    |  Some t1 ,  Some t2 -> 
       (match binop_info.boi_kind with
       | `Add -> CValue (Plus (t1, t2), fp)
       | `Sub -> CValue (Minus (t1, t2), fp)
@@ -883,34 +915,55 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `And -> CAssign (t1, CValue (TAnd(t1, t2), fp), fp)
       | `Or -> CAssign (t1, CValue (TOr(t1, t2), fp), fp)
       | `LT | `GT | `GE | `LE | `EQ | `NE ->  
-        let getOp v1 v2 : pure = 
-          match binop_info.boi_kind with
-          | `LT -> (Lt(Var v1, Var v2))
-          | `GT -> (Gt(Var v1, Var v2))
-          | `GE -> (GtEq(Var v1, Var v2))
-          | `LE -> (Lt(Var v1, Var v2))
-          | `EQ -> (Eq(Var v1, Var v2))
-          | `NE -> Neg (Eq(Var v1, Var v2))
-          | _ -> TRUE
-          
-        in 
+        CIfELse(getOp t1 t2  , CValue(Num 1, fp), CValue(Num 0, fp), fp)
+
+
+      (*
+              in 
+
+      *)
+
+        
+      | _ ->  
+        print_endline (string_of_binary_operator binop_info); 
+        CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
+      )
+
+    | Some t1 , None ->  
+      (match binop_info.boi_kind with
+      | `Assign -> 
+        let coreLang = convert_AST_to_core_program y in 
+        CAssign (t1, coreLang, fp)
+      | `LT | `GT | `GE | `LE | `EQ | `NE ->  
+        let coreLang2 = convert_AST_to_core_program y in 
+        let freshVar2 = verifier_get_A_freeVar UNIT in
+        
+        CSeq (CAssign (Var freshVar2, coreLang2, fp), 
+        CIfELse(getOp t1 (Var freshVar2) , CValue(Num 1, fp), CValue(Num 0, fp), fp))
+      | _ -> 
+        print_endline (string_of_binary_operator binop_info); 
+        CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
+      )
+      
+
+        
+        
+    | None , _ -> 
+      (match binop_info.boi_kind with
+      | `LT | `GT | `GE | `LE | `EQ | `NE ->  
         let coreLang1 = convert_AST_to_core_program x in 
         let coreLang2 = convert_AST_to_core_program y in 
         let freshVar1 = verifier_get_A_freeVar UNIT in
         let freshVar2 = verifier_get_A_freeVar UNIT in
         CSeq (CAssign (Var freshVar1, coreLang1, fp) , 
         CSeq (CAssign (Var freshVar2, coreLang2, fp), 
-        CIfELse(getOp freshVar1 freshVar2 , CValue(Num 1, fp), CValue(Num 0, fp), fp)))
-
-
-
-
- 
-      | _ ->  
+        CIfELse(getOp (Var freshVar1) (Var freshVar2) , CValue(Num 1, fp), CValue(Num 0, fp), fp)))
+      | _ -> 
         print_endline (string_of_binary_operator binop_info); 
         CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
       )
-    
+  
+
     )
 
   | MemberExpr (stmt_info, arLi, _, member_expr_info)  -> 
@@ -920,7 +973,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     if String.compare memArg "" == 0 then CValue ((Var(memArg ), fp))
     else 
       CSeq(CEvent(Pos("deref", [Var memArg]), fp), 
-      CValue((Member(Var memArg, temp), fp)))
+      CValue((Member(Var memArg, termOption2TermLi temp), fp)))
 
 
 
