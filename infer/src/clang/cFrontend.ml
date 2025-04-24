@@ -206,6 +206,8 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term option =
     | x :: rest -> 
     ((TApp(string_of_stmt x, List.map rest ~f:(fun a -> stmt2Term a))))  
     *)
+  | UnaryExprOrTypeTraitExpr _ -> None 
+
 
   | _ -> 
     print_endline (Clang_ast_proj.get_stmt_kind_string instr ^"(!!!stmt2Term)");
@@ -883,8 +885,12 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2), fp), fp)
       | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
       | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2), fp), fp)
-      | `And -> CAssign (t1, CValue (TAnd(t1, t2), fp), fp)
-      | `Or -> CAssign (t1, CValue (TOr(t1, t2), fp), fp)
+
+      | `And -> CValue (TAnd(t1, t2), fp)
+      | `Or -> CValue (TOr(t1, t2), fp)
+      | `Mul -> CValue (TTimes(t1, t2), fp)
+      | `Div -> CValue (TDiv(t1, t2), fp)
+
       | `LT | `GT | `GE | `LE | `EQ | `NE ->  
         CIfELse(getOp t1 t2  , CValue(Num 1, fp), CValue(Num 0, fp), fp)
 
@@ -896,7 +902,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
         
       | _ ->  
-        print_endline (string_of_binary_operator binop_info); 
+        print_endline (string_of_binary_operator binop_info ^ "1 "); 
         CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
       )
 
@@ -905,6 +911,36 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `Assign -> 
         let coreLang = convert_AST_to_core_program y in 
         CAssign (t1, coreLang, fp)
+
+      | `And -> 
+        let coreLang = convert_AST_to_core_program y in 
+        let freshVar = verifier_get_A_freeVar UNIT in
+        CSeq (CAssign (Var freshVar, coreLang, fp), 
+        CValue (TAnd(t1, Var freshVar), fp)
+        )
+
+       
+      | `Or -> 
+        let coreLang = convert_AST_to_core_program y in 
+        let freshVar = verifier_get_A_freeVar UNIT in
+        CSeq (CAssign (Var freshVar, coreLang, fp), 
+        CValue (TOr(t1, Var freshVar), fp)
+        )
+      | `Mul -> 
+        let coreLang = convert_AST_to_core_program y in 
+        let freshVar = verifier_get_A_freeVar UNIT in
+        CSeq (CAssign (Var freshVar, coreLang, fp), 
+        CValue (TTimes(t1, Var freshVar), fp)
+        )
+      
+      | `Div -> 
+        let coreLang = convert_AST_to_core_program y in 
+        let freshVar = verifier_get_A_freeVar UNIT in
+        CSeq (CAssign (Var freshVar, coreLang, fp), 
+        CValue (TDiv(t1, Var freshVar), fp)
+        )
+      
+  
       | `LT | `GT | `GE | `LE | `EQ | `NE ->  
         let coreLang2 = convert_AST_to_core_program y in 
         let freshVar2 = verifier_get_A_freeVar UNIT in
@@ -912,7 +948,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
         CSeq (CAssign (Var freshVar2, coreLang2, fp), 
         CIfELse(getOp t1 (Var freshVar2) , CValue(Num 1, fp), CValue(Num 0, fp), fp))
       | _ -> 
-        print_endline (string_of_binary_operator binop_info); 
+        print_endline (string_of_binary_operator binop_info ^ "2 "); 
         CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
       )
       
@@ -930,7 +966,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
         CSeq (CAssign (Var freshVar2, coreLang2, fp), 
         CIfELse(getOp (Var freshVar1) (Var freshVar2) , CValue(Num 1, fp), CValue(Num 0, fp), fp)))
       | _ -> 
-        print_endline (string_of_binary_operator binop_info); 
+        print_endline (string_of_binary_operator binop_info ^ "3 "); 
         CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
       )
   
@@ -946,7 +982,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     | Some x :: xs -> CValue (Member (x, termOption2TermLi xs) , fp) 
     | _ -> CSkip fp
     )
-    
+
   | MemberExpr (stmt_info, arLi, _,member_expr_info)  -> 
 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
@@ -1051,14 +1087,22 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     CValue (Nil, fp)
 
-  | CXXConstructExpr (stmt_info, stmtLi, expr_info, cxx_construct_expr_info) -> 
-    let (fp:int) = stmt_info2FootPrint stmt_info in 
-    (*print_endline (string_of_int (List.length stmtLi));  *)
-    CSkip fp
     (*  struct st p  *)
   | InitListExpr (stmt_info, stmtLi, expr_info) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     CValue ((Num 0), fp)
+
+
+  | UnaryExprOrTypeTraitExpr (stmt_info, _, _, _)  -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    CValue ((Num 1), fp)
+
+  | CXXConstructExpr (stmt_info, stmtLi, expr_info, cxx_construct_expr_info) -> 
+    let (fp:int) = stmt_info2FootPrint stmt_info in 
+    (*print_endline (string_of_int (List.length stmtLi));  *)
+    CSkip fp
+
+
 
   | _ -> 
     CFunCall((Clang_ast_proj.get_stmt_kind_string instr, [], -1)) 
