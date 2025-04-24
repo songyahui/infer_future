@@ -19,7 +19,7 @@ let invariantInference_counter: int ref = ref 0;;
 
 
 let debug_print str = 
-  if false then print_endline (str)
+  if true then print_endline (str)
   else ()
 
 let debug_printCFunCall str = 
@@ -45,7 +45,7 @@ let debug_Inv_Infer str =
   
 
 let debug_checkPostConditionError str = 
-    if false then debug_print (str)
+    if true  then debug_print (str)
     else ()
   
 let debug_derivative str = 
@@ -53,7 +53,7 @@ let debug_derivative str =
     else ()
 
 let report_print str = 
-    if false then print_endline (str)
+    if true then print_endline (str)
     else ()
   
     

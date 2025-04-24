@@ -1019,7 +1019,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       let loop = CWhile (loop_guard, CSeq(loop_body, update), fp)  in 
 
 
-      CSeq(init, CSeq(loop_body, loop))
+      CSeq(init, loop)
     | None -> 
       print_endline ("loop guard error do " ^ string_of_stmt condition);
       let update = convert_AST_to_core_program update in  
@@ -1027,7 +1027,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       let body = List.map body ~f:(fun a -> convert_AST_to_core_program a) in 
       let loop_body = sequentialComposingListStmt body fp in 
       let loop = CWhile (TRUE, CSeq(loop_body, update), fp)  in 
-      CSeq(init, CSeq(loop_body, loop))
+      CSeq(init, loop)
     )
 
   | DoStmt (stmt_info, body::condition::_) -> 
@@ -1261,7 +1261,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           debug_print("\nPostProcess= " ^ string_of_effect resetErrorCodeEffect);
 
 
-          let final  = state_merging resetErrorCodeEffect in 
+          let final  = resetErrorCodeEffect in 
 
 
           
