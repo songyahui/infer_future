@@ -49,7 +49,7 @@ let debug_checkPostConditionError str =
     else ()
   
 let debug_derivative str = 
-    if false then debug_print (str)
+    if true then debug_print (str)
     else ()
 
 let report_print str = 
@@ -136,6 +136,9 @@ type pure = TRUE
           | Exists of (string list) * pure 
           | Forall of (string list) * pure 
 
+
+
+
 type signature = (string * (term list)) 
 
 
@@ -198,6 +201,7 @@ let verifier_get_A_freeVar term :string  =
 type core_lang = 
   | CSkip of state
   | CValue of core_value * state 
+  | CEvent of (event * state)
   | CLocal of string * state
   | CAssign of core_value * core_lang * state
   | CSeq of core_lang * core_lang 
@@ -757,6 +761,7 @@ let rec string_of_core_lang (e:core_lang) :string =
   | CLable (str, state) ->  str ^ ": " ^ string_of_loc state
   | CGoto (str, state) -> "goto " ^ str ^ " " ^ string_of_loc state
   | CAssumeF (fc) -> "AssumeF" ^ string_of_fc fc
+  | CEvent (ev, _) -> "ev(" ^ string_of_event ev ^ ")"
 
 
 

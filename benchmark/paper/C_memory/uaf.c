@@ -39,8 +39,9 @@ int main(int argc, char **argv)
                         service = strdup(line + 7);
                 }
                 if(strncmp(line, "login", 5) == 0) {
-                        if(auth->auth) {
-                                printf("you have logged in already!\n", auth);
+                        int t = auth->auth; 
+                        if(t) {
+                                printf("you have logged in already!\n");
                         } else {
                                 printf("please enter your password\n");
                         }

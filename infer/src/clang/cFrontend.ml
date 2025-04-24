@@ -602,6 +602,11 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       
   | CAssumeF (fcAssert) -> 
     [(exs, p, re, Conjunction (fc, fcAssert), ret, errorCode)]
+  | CEvent (ev, fp) -> 
+    (compose_effects state ([([], TRUE, Singleton(ev) , fc_default, ret, errorCode)]) fp)
+      
+    
+
   | CSkip _ -> [state]
   | _ -> [state]
   in 
@@ -832,8 +837,16 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `PostInc -> CAssign(varFromX, CValue (Plus(varFromX, Num 1), fp), fp)
       | `PreDec
       | `PostDec -> CAssign(varFromX, CValue (Minus(varFromX, Num 1), fp), fp)
-      | `AddrOf 
-      | `Deref -> CValue (varFromX, fp)
+      | `AddrOf -> CValue (varFromX, fp)
+      | `Deref -> 
+        (match varFromX with
+        | Member (t, _) -> 
+          CSeq(CEvent(Pos("deref", [t]), fp),  
+          CValue (varFromX, fp))
+        | _ -> CValue (varFromX, fp)
+        )
+        
+        
       | `Minus -> CValue (TTimes(Num (-1), varFromX), fp)
       | _ -> 
         print_endline (string_of_unary_operator_info unary_operator_info); 
@@ -869,43 +882,27 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2), fp), fp)
       | `And -> CAssign (t1, CValue (TAnd(t1, t2), fp), fp)
       | `Or -> CAssign (t1, CValue (TOr(t1, t2), fp), fp)
-      | `NE -> 
-        let coreLang1 = convert_AST_to_core_program x in 
-        let coreLang2 = convert_AST_to_core_program y in 
-        let freshVar1 = verifier_get_A_freeVar UNIT in
-        let freshVar2 = verifier_get_A_freeVar UNIT in
-        CSeq (CAssign (Var freshVar1, coreLang1, fp) , 
-        CSeq (CAssign (Var freshVar2, coreLang2, fp), 
-        CIfELse(Neg (Eq(Var freshVar1, Var freshVar2)), CValue(Num 1, fp), CValue(Num 0, fp), fp)
-        )
-        
-        )
-      | `EQ ->
-        let coreLang1 = convert_AST_to_core_program x in 
-        let coreLang2 = convert_AST_to_core_program y in 
-        let freshVar1 = verifier_get_A_freeVar UNIT in
-        let freshVar2 = verifier_get_A_freeVar UNIT in
-        CSeq (CAssign (Var freshVar1, coreLang1, fp) , 
-        CSeq (CAssign (Var freshVar2, coreLang2, fp), 
-        CIfELse(Eq(Var freshVar1, Var freshVar2), CValue(Num 1, fp), CValue(Num 0, fp), fp)
-        )
-        
-        )
-
-        (*
-        let (p:pure) = loop_guard instr in 
-        (
-        match p with 
-        | Eq(TApp (op, args), t) ->  
-          let freshVar = verifier_get_A_freeVar UNIT in
-          CSeq(CAssign(Var freshVar, CFunCall(op, args, fp), fp) , 
+      | `LT | `GT | `GE | `LE | `EQ | `NE ->  
+        let getOp v1 v2 : pure = 
+          match binop_info.boi_kind with
+          | `LT -> (Lt(Var v1, Var v2))
+          | `GT -> (Gt(Var v1, Var v2))
+          | `GE -> (GtEq(Var v1, Var v2))
+          | `LE -> (Lt(Var v1, Var v2))
+          | `EQ -> (Eq(Var v1, Var v2))
+          | `NE -> Neg (Eq(Var v1, Var v2))
+          | _ -> TRUE
           
-          CIfELse(Eq(Var freshVar, t), CValue(Num 1, fp), CValue(Num 0, fp), fp))
-        | _ -> CIfELse(p, CValue(Num 1, fp), CValue(Num 0, fp), fp)
+        in 
+        let coreLang1 = convert_AST_to_core_program x in 
+        let coreLang2 = convert_AST_to_core_program y in 
+        let freshVar1 = verifier_get_A_freeVar UNIT in
+        let freshVar2 = verifier_get_A_freeVar UNIT in
+        CSeq (CAssign (Var freshVar1, coreLang1, fp) , 
+        CSeq (CAssign (Var freshVar2, coreLang2, fp), 
+        CIfELse(getOp freshVar1 freshVar2 , CValue(Num 1, fp), CValue(Num 0, fp), fp)))
 
 
-        )
-        *)
 
 
  
@@ -921,7 +918,9 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let memArg = member_expr_info.mei_name.ni_name in 
     let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
     if String.compare memArg "" == 0 then CValue ((Var(memArg ), fp))
-    else CValue((Member(Var memArg, temp), fp))
+    else 
+      CSeq(CEvent(Pos("deref", [Var memArg]), fp), 
+      CValue((Member(Var memArg, temp), fp)))
 
 
 
