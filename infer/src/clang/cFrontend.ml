@@ -349,7 +349,7 @@ let rec stmt2Pure (instr: Clang_ast_t.stmt) : pure option =
     | `GT -> stmt2Pure_helper ">" (stmt2Term x) (stmt2Term y) 
     | `GE -> stmt2Pure_helper ">=" (stmt2Term x) (stmt2Term y) 
     | `LE -> stmt2Pure_helper "<=" (stmt2Term x) (stmt2Term y) 
-    | `EQ -> stmt2Pure_helper "=" (stmt2Term x) (stmt2Term y) 
+    (*| `EQ -> stmt2Pure_helper "=" (stmt2Term x) (stmt2Term y) *)
     | `NE -> stmt2Pure_helper "!=" (stmt2Term x) (stmt2Term y) 
     | `And | `LAnd -> 
       (match ((stmt2Pure x ), (stmt2Pure y )) with 
@@ -524,7 +524,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   | CFunCall (f, xs, fp) -> 
     let f_summary = findSpecificationSummaries f !summaries (List.length xs) in
     (match f_summary with 
-    | None -> [state]
+    | None -> [(exs, p, re, fc, ANY, errorCode)]
     | Some summary -> 
       let summary =  summary in 
       debug_printCFunCall ("current state : " ^ string_of_effect [state]); 
@@ -646,11 +646,6 @@ let rec extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt
 | _ -> 
   None 
 )
-
-let loop_guard condition = 
-  match stmt2Pure condition with 
-    | None -> print_endline ("loop guard error " ^ string_of_stmt condition); TRUE
-    | Some p -> p
 
 
 let rec createIntermediateValue4execution (li:term list) state : ((core_lang list) * (term list)) = 
@@ -787,11 +782,20 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | WhileStmt (stmt_info, condition:: stmtLi) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
-    let (loop_guard:pure) = loop_guard condition in 
-    let stmts = List.map stmtLi ~f:(fun a -> convert_AST_to_core_program a) in 
+    (
+    match stmt2Pure condition with 
+    | Some p -> 
+      let stmts = List.map stmtLi ~f:(fun a -> convert_AST_to_core_program a) in 
+      let core_lang = sequentialComposingListStmt stmts fp in 
+      CWhile (p, core_lang, fp)
 
-    let core_lang = sequentialComposingListStmt stmts fp in 
-    CWhile (loop_guard, core_lang, fp)
+    | None -> 
+      print_endline ("loop guard error " ^ string_of_stmt condition); 
+      let stmts = List.map stmtLi ~f:(fun a -> convert_AST_to_core_program a) in 
+      let core_lang = sequentialComposingListStmt stmts fp in 
+      CWhile (TRUE, core_lang, fp)
+
+    ) 
 
   | (IfStmt (stmt_info, condition:: stmtLi, _))  -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
@@ -850,18 +854,45 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `Sub -> CValue (Minus (t1, t2), fp)
       | `Assign -> 
         (match t2 with 
-        | TApp (op, args) ->  CAssign (t1, CFunCall (op, args, fp), fp)
-        | _ -> CAssign (t1, CValue (t2, fp), fp)
+        | Num _ | Var _ | UNIT | ANY | Nil | Str _ | TTrue | TFalse -> 
+          CAssign (t1, CValue (t2, fp), fp)
+        | _ -> 
+          let y_corelang = convert_AST_to_core_program y in 
+          let freshVar = verifier_get_A_freeVar UNIT in
+          CSeq(CAssign(Var freshVar, y_corelang, fp) ,  
+          CAssign (t1, CValue(Var freshVar, fp) , fp))
         )
         
       | `MulAssign -> CAssign (t1, CValue (TTimes(t1, t2), fp), fp)
       | `DivAssign -> CAssign (t1, CValue (TDiv(t1, t2), fp), fp)
       | `AddAssign-> CAssign (t1, CValue (Plus(t1, t2), fp), fp)
       | `SubAssign -> CAssign (t1, CValue (Minus(t1, t2), fp), fp)
-      | `And 
-      | `Or 
-      | `NE 
+      | `And -> CAssign (t1, CValue (TAnd(t1, t2), fp), fp)
+      | `Or -> CAssign (t1, CValue (TOr(t1, t2), fp), fp)
+      | `NE -> 
+        let coreLang1 = convert_AST_to_core_program x in 
+        let coreLang2 = convert_AST_to_core_program y in 
+        let freshVar1 = verifier_get_A_freeVar UNIT in
+        let freshVar2 = verifier_get_A_freeVar UNIT in
+        CSeq (CAssign (Var freshVar1, coreLang1, fp) , 
+        CSeq (CAssign (Var freshVar2, coreLang2, fp), 
+        CIfELse(Neg (Eq(Var freshVar1, Var freshVar2)), CValue(Num 1, fp), CValue(Num 0, fp), fp)
+        )
+        
+        )
       | `EQ ->
+        let coreLang1 = convert_AST_to_core_program x in 
+        let coreLang2 = convert_AST_to_core_program y in 
+        let freshVar1 = verifier_get_A_freeVar UNIT in
+        let freshVar2 = verifier_get_A_freeVar UNIT in
+        CSeq (CAssign (Var freshVar1, coreLang1, fp) , 
+        CSeq (CAssign (Var freshVar2, coreLang2, fp), 
+        CIfELse(Eq(Var freshVar1, Var freshVar2), CValue(Num 1, fp), CValue(Num 0, fp), fp)
+        )
+        
+        )
+
+        (*
         let (p:pure) = loop_guard instr in 
         (
         match p with 
@@ -874,6 +905,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
 
         )
+        *)
 
 
  
@@ -902,24 +934,46 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     *)
 
     let init = convert_AST_to_core_program init in 
-    let (loop_guard:pure) = loop_guard condition in 
-    let update = convert_AST_to_core_program update in  
+    (
+    match stmt2Pure condition with 
+    | Some loop_guard -> 
+      let update = convert_AST_to_core_program update in  
 
-    let body = List.map body ~f:(fun a -> convert_AST_to_core_program a) in 
-    let loop_body = sequentialComposingListStmt body fp in 
-    let loop = CWhile (loop_guard, CSeq(loop_body, update), fp)  in 
+      let body = List.map body ~f:(fun a -> convert_AST_to_core_program a) in 
+      let loop_body = sequentialComposingListStmt body fp in 
+      let loop = CWhile (loop_guard, CSeq(loop_body, update), fp)  in 
 
 
-    CSeq(init, CSeq(loop_body, loop))
+      CSeq(init, CSeq(loop_body, loop))
+    | None -> 
+      print_endline ("loop guard error do " ^ string_of_stmt condition);
+      let update = convert_AST_to_core_program update in  
+
+      let body = List.map body ~f:(fun a -> convert_AST_to_core_program a) in 
+      let loop_body = sequentialComposingListStmt body fp in 
+      let loop = CWhile (TRUE, CSeq(loop_body, update), fp)  in 
+      CSeq(init, CSeq(loop_body, loop))
+    )
 
   | DoStmt (stmt_info, body::condition::_) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
-    let (loop_guard:pure) = loop_guard condition in 
-    let body = List.map [body] ~f:(fun a -> convert_AST_to_core_program a) in 
-    let loop_body = sequentialComposingListStmt body fp in 
+    (match stmt2Pure condition with 
+    | Some loop_guard -> 
+    
+      let body = List.map [body] ~f:(fun a -> convert_AST_to_core_program a) in 
+      let loop_body = sequentialComposingListStmt body fp in 
 
-    let loop = CWhile (loop_guard, loop_body, fp)  in 
-    CSeq(loop_body, loop)
+      let loop = CWhile (loop_guard, loop_body, fp)  in 
+      CSeq(loop_body, loop)
+    | None -> 
+      print_endline ("loop guard error do " ^ string_of_stmt condition); 
+      let body = List.map [body] ~f:(fun a -> convert_AST_to_core_program a) in 
+      let loop_body = sequentialComposingListStmt body fp in 
+
+      let loop = CWhile (TRUE, loop_body, fp)  in 
+      CSeq(loop_body, loop)
+
+    )
 
 
   | LabelStmt (stmt_info, stmtLi, label_name) -> 

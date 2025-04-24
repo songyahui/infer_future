@@ -23,7 +23,7 @@ let debug_print str =
   else ()
 
 let debug_printCFunCall str = 
-  if true then debug_print (str)
+  if false then debug_print (str)
   else ()
 
 let debug_printTraceSubtraction str = 
@@ -456,6 +456,7 @@ let rec term_to_expr ctx : term -> Z3.Expr.expr = function
 
 
 let rec pi_to_expr ctx : pure -> Expr.expr = function
+  | Eq (_, ANY) 
   | TRUE                -> Z3.Boolean.mk_true ctx
   | FALSE               -> Z3.Boolean.mk_false ctx
   | Gt (t1, t2) -> 
@@ -647,6 +648,7 @@ let superset list1 list2 p  =
 
 let rec normalize_pure (pi:pure) : pure = 
   match pi with 
+  | Eq (_, ANY) -> TRUE
   | TRUE 
   | FALSE -> pi
   | LtEq ((Num n), (Var v)) -> GtEq ((Var v), (Num n))
