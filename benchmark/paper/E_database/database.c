@@ -76,6 +76,7 @@ int main2() {
     }
 
     // Later in code...
+    db = NULL; 
     if (sqlite3_open("test2.db", &db) != SQLITE_OK) {
         fprintf(stderr, "Failed to open DB2\n");
         return 1;

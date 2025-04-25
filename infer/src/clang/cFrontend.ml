@@ -531,10 +531,10 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       substitute_effect effect1 [(Var r, v)], [r]
 
     in 
-    let ev = Pos ("a", [v]) in 
+    let ev = Emp in (*Singleton (Pos ("a", [v]))*) 
     flattenList (List.map ~f:(fun (exs, p, re, fc, ret, errorCode) -> 
       let state' = (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT, errorCode) in 
-      compose_effects state' ([([], TRUE, Singleton(ev) , fc_default, ret, errorCode)]) fp
+      compose_effects state' ([([], TRUE, ev, fc_default, ret, errorCode)]) fp
     ) effect1' )
     
     
@@ -737,14 +737,23 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   | ReturnStmt  (stmt_info, stmtLi) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
-    let terms = List.map stmtLi ~f:(fun a -> stmt2Term a) in 
 
-    (
-    match terms with
-    | [] -> (CFunCall("return", [UNIT], fp))
-    | Some x :: _ -> (CFunCall("return", [x], fp))
-    | _ -> (CFunCall("return", [TList(termOption2TermLi terms)], fp))
-    )
+    let coreLang, termLi =  
+      List.fold_left ~f:(fun (accL, acctL) term -> 
+        match stmt2Term term with 
+        | Some t  -> (accL, acctL@[t]) 
+        | None -> 
+          let coreLangTerm = convert_AST_to_core_program term in 
+          let freshVar = verifier_get_A_freeVar UNIT in
+          let accL' = accL@ [CAssign(Var freshVar, coreLangTerm, fp)] in 
+          (accL', acctL@[Var freshVar])
+    
+
+      
+      ) ~init:([], []) stmtLi 
+    in 
+
+    sequentialComposingListStmt (coreLang @ [(CFunCall("return", termLi, fp))]) fp
 
     
     
@@ -884,6 +893,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `Or | `LOr   -> (TOr( v1,  v2))
       | `Mul -> (TTimes( v1,  v2))
       | `Div-> (TDiv( v1,  v2))
+      | `Sub -> (Minus( v1,  v2))
       | _ -> Nil
     in 
 
@@ -973,7 +983,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
         CSeq (CAssign (Var freshVar2, coreLang2, fp), 
         CIfELse(getOpPure (Var freshVar1) (Var freshVar2) , CValue(Num 1, fp), CValue(Num 0, fp), fp)))
 
-      | `And | `Or | `Mul | `Div | `LAnd | `LOr  -> 
+      | `And | `Or | `Mul | `Div | `LAnd | `LOr | `Sub -> 
         let coreLang1 = convert_AST_to_core_program x in 
         let freshVar1 = verifier_get_A_freeVar UNIT in
 
@@ -1020,10 +1030,14 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     let memArg = member_expr_info.mei_name.ni_name in 
     let temp = List.map arLi ~f:(fun a -> stmt2Term a) in 
+    let pointer = match temp with 
+    | Some x :: _ -> x 
+    | _ -> Nil 
+    in 
     if String.compare memArg "" == 0 then CValue ((Var(memArg ), fp))
     else 
-      CSeq(CEvent(Pos("deref", [Var memArg]), fp), 
-      CValue((Member(Var memArg, termOption2TermLi temp), fp)))
+      CSeq(CEvent(Pos("deref", [pointer]), fp), 
+      CValue((Member(pointer, [Var memArg]), fp)))
 
 
 
