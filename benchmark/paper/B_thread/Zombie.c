@@ -51,8 +51,6 @@ int main_Zombie1() {
 }
 
 
-
-
 int main_Zombie2() {
     pthread_t tid;
     pthread_create(&tid, NULL, thread_func, NULL);

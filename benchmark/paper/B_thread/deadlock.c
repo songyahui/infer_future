@@ -91,3 +91,16 @@ int main1() {
     pthread_mutex_destroy(&resource2);
     return 0;
 }
+
+
+void critical_section() {
+    pthread_mutex_lock(&resource1);
+    // Do something
+    // Forgot to unlock - BAD!
+}
+
+int main2() {
+    critical_section();
+    // Now no one can lock the mutex again
+    return 0;
+}

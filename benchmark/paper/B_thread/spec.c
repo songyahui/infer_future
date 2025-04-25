@@ -7,3 +7,12 @@
 /*@ pthread_join(a, b) =
     REQ  TRUE
     ENS (∃r : TRUE ; pthread_join(a) ; (_)^* ; r) @*/
+
+/*@ pthread_mutex_lock(a) = 
+    REQ TRUE
+    ENS (∃ l : TRUE ; pthread_mutex_lock(a)  ; (!pthread_mutex_unlock(a))^* · pthread_mutex_unlock(a) ·  (_)^* ; l)  @*/
+
+/*@ pthread_mutex_unlock(a) =
+    REQ  TRUE
+    ENS (∃r : TRUE ; pthread_mutex_unlock(a) ; (_)^* ; r) @*/
+

@@ -45,7 +45,7 @@ let debug_Inv_Infer str =
   
 
 let debug_checkPostConditionError str = 
-    if true  then debug_print (str)
+    if false  then debug_print (str)
     else ()
   
 let debug_derivative str = 
@@ -1031,9 +1031,9 @@ match ev with
     else  
       Singleton (Bag (commonArr, deriIntegrated)) 
     
-  | Neg (strTarget, argsTarget) -> Bot
+  (*| Neg (strTarget, argsTarget) -> Bot *)
 
-  | _ -> Bot
+  | _ -> Singleton evTarget
   )
 | ANY  -> 
   (match evTarget with 
