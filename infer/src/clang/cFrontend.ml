@@ -984,6 +984,16 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
         CValue (getOpTerm (Var freshVar1) (Var freshVar2), fp)
         ))
 
+      | `Assign -> 
+        let coreLang1 = convert_AST_to_core_program x in 
+        let freshVar1 = verifier_get_A_freeVar UNIT in
+
+        let coreLang2 = convert_AST_to_core_program y in 
+        CSeq(CAssign (Var freshVar1, coreLang1, fp),  
+        CAssign (Var freshVar1, coreLang2, fp)
+        )
+        
+
        
 
 
