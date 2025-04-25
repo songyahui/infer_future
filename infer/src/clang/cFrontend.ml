@@ -853,8 +853,12 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       )
       
     | None -> 
+      (match unary_operator_info.uoi_kind with
+      | `AddrOf -> convert_AST_to_core_program x
+      | _ -> 
       print_endline (string_of_unary_operator_info unary_operator_info); 
       CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)], fp)) 
+      )
     )
 
   | BinaryOperator (stmt_info, [x], _, binop_info)->

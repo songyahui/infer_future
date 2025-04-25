@@ -40,7 +40,7 @@ let debug_postprocess str =
     else ()
 
 let debug_Inv_Infer str = 
-    if false then debug_print (str)
+    if true then debug_print (str)
     else ()
   
 
@@ -53,7 +53,7 @@ let debug_derivative str =
     else ()
 
 let report_print str = 
-    if true then print_endline (str)
+    if false then print_endline (str)
     else ()
   
     
