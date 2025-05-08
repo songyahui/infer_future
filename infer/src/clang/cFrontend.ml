@@ -611,6 +611,7 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
       let eff_loop_body = substitute_effect 
         (aux body' defaultSinglesEff) mappings in 
       debug_Inv_Infer("loopbodyEff " ^  string_of_effect eff_loop_body);
+      
       let trace, futureCond = invariantInference interval eff_loop_body array_handlers fp in  
       debug_Inv_Infer("InvTrace " ^  string_of_regularExpr trace);
       debug_Inv_Infer("InvFC " ^ string_of_fc futureCond);

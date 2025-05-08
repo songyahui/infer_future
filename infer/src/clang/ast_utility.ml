@@ -53,7 +53,7 @@ let debug_derivative str =
     else ()
 
 let report_print str = 
-    if false then print_endline (str)
+    if true then print_endline (str)
     else ()
   
     
@@ -604,11 +604,22 @@ let rec nullable (eff:regularExpr) : bool =
   match eff with 
   | Bot            -> false 
   | Emp            -> true 
-  | Singleton (Bag(_, spec)) -> List.for_all ~f:(fun (_, es) -> nullable es)  spec
+  | Singleton (Bag(_, spec)) -> List.exists ~f:(fun (_, es) -> nullable es)  spec
   | Singleton _    -> false
   | Concate (eff1, eff2) -> nullable eff1 && nullable eff2  
   | Disjunction (eff1, eff2) -> nullable eff1 || nullable eff2  
   | Conjunction (eff1, eff2) -> nullable eff1 && nullable eff2  
+  | Kleene _       -> true
+
+let rec all_nullable (eff:regularExpr) : bool = 
+  match eff with 
+  | Bot            -> false 
+  | Emp            -> true 
+  | Singleton (Bag(_, spec)) -> List.for_all ~f:(fun (_, es) -> all_nullable es)  spec
+  | Singleton _    -> false
+  | Concate (eff1, eff2) -> all_nullable eff1 && all_nullable eff2  
+  | Disjunction (eff1, eff2) -> all_nullable eff1 && all_nullable eff2  
+  | Conjunction (eff1, eff2) -> all_nullable eff1 && all_nullable eff2  
   | Kleene _       -> true
 
 
@@ -1433,7 +1444,7 @@ let checkNullableAndPrintErrorMsg fcExists fp p =
     | _ -> "\n  Pure =  " ^ string_of_pure p
   in  
   let fcs = decomposeteFCtoRE fcExists in 
-  let falseFCS = List.filter ~f:(fun a -> if nullable a then false else true ) fcs in 
+  let falseFCS = List.filter ~f:(fun a -> if all_nullable a then false else true ) fcs in 
   (if List.length falseFCS == 0 
       then ()
       else 

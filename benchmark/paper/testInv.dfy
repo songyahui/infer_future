@@ -23,15 +23,28 @@ method open(path: string, mode: int) returns (fd: int)
 
 
 method iter_files(n: int, paths: array<string>) returns (fd: seq<int>)
-  requires 0 < n
+  requires 100 < n
   requires paths.Length >= n 
   ensures |fd| == n
   // ensures forall j :: 0 <= j < |fd| ==> fd[j] > 0 
-  ensures forall j :: 0 <= j < n ==> fd[j] > 0 || fd[j] == -1
+  ensures forall j :: 1 <= j < n ==> fd[j] > 0 || fd[j] == -1
 {
+  var fd1 := new int[10] [-2, -2, -2,-2,-2,-2,-2,-2,-2,-2];
+
+  var i:= 8;
+  while (i > 0 )
+  // invariant i >= 0 
+  invariant forall j :: i < j <= 8 ==> fd1[j] > 0 || fd1[j] == -1 
+  {
+    fd1[i] := open(paths[i], 0) ; 
+    i := i - 1; 
+  }
+
+
+
   fd := [];
 
-  var i:= 0;
+  i:= 0;
   while (i < n)
   invariant i <= n 
   invariant forall j :: 0 <= j < |fd| ==> fd[j] > 0 || fd[j] == -1
@@ -43,13 +56,14 @@ method iter_files(n: int, paths: array<string>) returns (fd: seq<int>)
 
   assert forall j :: 0 <= j < |fd| ==> fd[j] > 0 || fd[j] == -1;
 
-  fd := [];
-  assert |fd| == 0; 
-  i:= 0;
+
+  fd := [0];
+  assert |fd| == 1; 
+  i:= 1;
   while (i < n)
   invariant i <= n 
   invariant |fd| == i
-  invariant forall j :: 0 <= j < |fd| ==> fd[j] > 0  || fd[j] == -1
+  invariant forall j :: 1 <= j < |fd| ==> fd[j] > 0  || fd[j] == -1
   {
     var temp := open(paths[i], 0) ; 
     fd := fd + [temp]; // readonly
