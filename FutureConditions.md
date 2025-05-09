@@ -1,19 +1,10 @@
-# Compile  
 
-```
-./compile
-```
+infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/'
 
-# Project Structure  
 
-- Main Logic for forward reasoning: `infer_future/infer/src/clang/cFrontend.ml` 
-- Utility functions and data structure definition: `infer_future/infer/src/clang/ast_utility.ml`
-- Parser: `infer_future/infer/src/clang/parser.mly` 
-- Lexer: `infer_future/infer/src/clang/lexer.mll` 
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c 
 
-# Experimental Results Reproduce 
-
-## 1_File
+# File
 
 ```
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/A_file/recouce_leak.c'
@@ -28,7 +19,7 @@ infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmar
 ```
 
 
-## 2_Thread 
+# Thread 
 
 ```
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/B_thread/zombie1.c'
@@ -39,7 +30,7 @@ infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmar
 ```
 
 
-## 3_Memory Benchmark 
+# Memory Benchmark 
 
 ```
 
@@ -59,7 +50,27 @@ infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmar
 ```
 
 
-## 4_Socket, 5_Database,  6_UCR_NPD
+
+
+```
+
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/double_free.c'
+
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/CWE-416-Use-After-Free.c'
+
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/Fig4.c'
+
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/Fig5.c'
+
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/memoery-loop.c'
+
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/memory_leak.c'
+
+ ../../infer-osx-x86_64-v1.2.0/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/uaf.c'
+```
+
+
+# Socket # Database # UCR 
 ```
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/D_socket/socket.c' 
 
@@ -68,3 +79,21 @@ infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmar
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/F_protocol.c/Fig17.c' 
 ```
 
+
+
+
+
+
+
+
+I am trying to build a termination analyzer for large projects
+
+
+https://gitlab.com/sosy-lab/benchmarking/sv-benchmarks/-/tree/main/c?ref_type=heads
+https://sv-comp.sosy-lab.org/2024/benchmarks.php
+
+
+./infer/bin/infer run --pulse-only -- clang++ -c benchmark/pulseinf/loop_conditional_non_terminate.cpp
+
+./infer/bin/infer run --pulse-only -- make --keep-going 
+./build-infer.sh clang      
