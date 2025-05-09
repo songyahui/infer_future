@@ -128,3 +128,13 @@ int main1() {
     return 0;
 
 }
+
+
+int main2() {
+
+    char *cleartext_buffer = malloc(1);
+    cleartext_buffer = realloc(cleartext_buffer, 1024);
+
+    scrub_memory(cleartext_buffer, 1024);
+
+}
