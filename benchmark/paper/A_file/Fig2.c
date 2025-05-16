@@ -60,6 +60,26 @@ void open_and_read_and_write(const char* path)
     return; 
 }
 
+void open_and_read_and_write_extra(const char* path) 
+{ 
+    void* buf;  
+    if (path == "") {
+        int fd = open(path, O_RDWR); 
+        if (fd==-1) return; 
+        ssize_t bytes1 = read(fd, buf, 1); 
+        ssize_t bytes2 = write(fd, buf, 1); 
+        close(fd);
+        return; }
+    else {
+        int fd = open(path, O_WRONLY); 
+        if (fd==-1) return; 
+        ssize_t bytes1 = read(fd, buf, 1); 
+        ssize_t bytes2 = write(fd, buf, 1); 
+        close(fd);
+        return; 
+    }
+}
+
 
 void open_and_write1(const char* path) {
     // Open the file in write-only mode, create it if it doesn't exist, and truncate it if it does.

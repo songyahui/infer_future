@@ -27,6 +27,7 @@ int main() {
 
 int test(void* q) {
   q = malloc(1);
+  void* p = malloc(1);
   return 1; 
 }
 

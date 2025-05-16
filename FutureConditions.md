@@ -15,7 +15,7 @@ infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmar
 
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/A_file/Fig16.c'
 
-infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/A_file/test_fatfs_common.c'
+infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/A1_file/test_fatfs_common.c'
 ```
 
 
@@ -47,6 +47,9 @@ infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmar
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/memory_leak.c'
 
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/uaf.c'
+
+
+infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/C_memory/fn_fp.c'
 ```
 
 

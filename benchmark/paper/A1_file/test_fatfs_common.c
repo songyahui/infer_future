@@ -492,4 +492,3 @@ void test_fatfs_mkdir_rmdir(const char* filename_prefix)
     TEST_ASSERT_EQUAL(0, unlink(name_dir2_file));
     TEST_ASSERT_EQUAL(0, rmdir(name_dir2));
 }
-

@@ -1009,7 +1009,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
 
       | _ -> 
-        print_endline (string_of_binary_operator binop_info ^ "3 "); 
+        report_print (string_of_binary_operator binop_info ^ "3 "); 
         CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_binary_operator binop_info)], fp)) 
       )
   
@@ -1580,7 +1580,11 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   let msg = 
     source_Address ^ ","
   ^ string_of_int (lines_of_code + 1 ) ^ "," (*  lines of code;  *) 
-  ^ string_of_float (analysisTime)^ "," (* "Analysis took "^ , seconds.\n\n *)
+  ^ string_of_int (number_of_protocol_macro + number_of_protocol_local) ^ "," 
+  ^ string_of_int (List.length !summaries - (number_of_protocol_macro + number_of_protocol_local)) ^ "," 
+  ^ string_of_int (!invariantInference_counter) ^ "," 
+  ^ string_of_int ((!errormessagecounter)) ^ "," 
+  ^ string_of_float (analysisTime)^ "\n" (* "Analysis took "^ , seconds.\n\n *)
   in 
 
   report_print ("\n+--------------------+-----------------+"); 
@@ -1590,7 +1594,7 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
 
 
   let () = finalReport := !finalReport ^ msg ^ !errormessage in 
-  let dirName = "/infer-term" in 
+  let dirName = "/infer-future" in 
   let path = Sys.getcwd()  (* "/Users/yahuis/Desktop/git/infer_termination/" *) in 
 
 
