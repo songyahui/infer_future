@@ -44,3 +44,27 @@ with open(output_file, 'w', newline='') as csvfile:
     writer.writerow(summary_row)
 
 print(f"Processed CSV file has been saved to {output_file}")
+
+
+def pretty_print_csv(filename):
+    with open(filename, 'r') as file:
+        reader = csv.reader(file)
+        data = list(reader)
+    
+    # Calculate column widths
+    col_widths = [max(len(str(item)) for item in col) for col in zip(*data)]
+    
+    # Print header separator
+    print('+' + '+'.join(['-' * (width + 2) for width in col_widths]) + '+')
+    
+    # Print rows
+    for i, row in enumerate(data):
+        # Print header row differently
+        if i == 0:
+            print('| ' + ' | '.join(f"{str(item):^{width}}" for item, width in zip(row, col_widths)) + ' |')
+            print('+' + '+'.join(['=' * (width + 2) for width in col_widths]) + '+')
+        else:
+            print('| ' + ' | '.join(f"{str(item):<{width}}" for item, width in zip(row, col_widths)) + ' |')
+            print('+' + '+'.join(['-' * (width + 2) for width in col_widths]) + '+')
+
+pretty_print_csv(output_file)
