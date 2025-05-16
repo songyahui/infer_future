@@ -53,3 +53,6 @@ infer/bin/infer run -- clang -c benchmark/paper/E_database/database.c
 infer/bin/infer run -- clang -c benchmark/paper/F_protocol.c/Fig17.c 
 
 
+python3 postprocess.py
+
+cat infer-future/reportPost.csv | sed -e 's/,,/, ,/g' | column -s, -t | less -#5 -N -S
