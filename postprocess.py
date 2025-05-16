@@ -18,14 +18,14 @@ with open(input_file, 'r') as csvfile:
 
 # Calculate sums for the summary row
 sum_loc = sum(int(row[1]) for row in data)
-sum_prims = sum(int(row[2]) for row in data)
+# sum_prims = sum(int(row[2]) for row in data)
 sum_inferreds = sum(int(row[3]) for row in data)
 sum_inferredinv = sum(int(row[4]) for row in data)
 sum_report = sum(int(row[5]) for row in data)
 sum_time = sum(float(row[6]) for row in data)
 
 # Create the summary row
-summary_row = ['-', str(sum_loc), str(sum_prims), str(sum_inferreds), 
+summary_row = ['-', str(sum_loc), '-', str(sum_inferreds), 
                str(sum_inferredinv), str(sum_report), f"{sum_time:.9f}"]
 
 # Write to output file with headers and summary
