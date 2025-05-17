@@ -1,10 +1,28 @@
+# Build from Docker
+
+For artifact evaluation, we have built a docker image, which (is recommended and) can be accessed
+by the following commands:
+
+```
+docker pull anonymous614/sas25-future-condition:default
+docker run -i -t anonymous614/sas25-future-condition:default /bin/bash
+```
+
+
 # Compile  
 
 ```
+cd home/infer_future
 ./compile
 ```
 
-# Project Structure  
+# Reproduce Table 3 
+
+```
+./table3 
+```
+
+# Project Structure (Main files)
 
 - Main Logic for forward reasoning: `infer_future/infer/src/clang/cFrontend.ml` 
 - Utility functions and data structure definition: `infer_future/infer/src/clang/ast_utility.ml`
@@ -24,7 +42,7 @@ infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmar
 
 infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/A_file/Fig16.c'
 
-infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/A_file/test_fatfs_common.c'
+infer/bin/infer run -- clang -c '/Users/yahuis/Desktop/git/infer_future/benchmark/paper/A1_file/test_fatfs_common.c'
 ```
 
 
