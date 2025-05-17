@@ -43,19 +43,37 @@ The numbers in the last line do not exactly match those in the paper due to mino
 
 # Compile (Extensible badge)
 
-To compile the source code:
-Navigate to the source code directory.
-Run the compile script. The compilation may take 3-5 mins. 
+## To compile from the docker: Navigate to the source code directory. Run the compile script. The compilation may take 3-5 mins. 
+
 ```
 cd home/infer_future
 ./compile
 ```
 
-To facilitate the extension, here presents the main files and their functionalities: 
+## To compile from the source code: 
+
+
+```
+# Dependencies: 
+apt-get update
+apt-get upgrade
+apt install opam
+opam install z3
+apt install menhir
+apt install cmake
+apt install sqlite3 
+apt install curl
+# Compile from the source: 
+cd infer_future # navigate to the folder 
+./compile
+```
+
+## To facilitate the extension, here presents the main files and their functionalities: 
 
 - Main Logic for forward reasoning: `infer_future/infer/src/clang/cFrontend.ml`. The forward rules are in the function "forward_reasoning"; and before that the main logic is defined in "do_source_file" function. 
 - Utility functions and data structure definition: `infer_future/infer/src/clang/ast_utility.ml`. The main data type for the specification is named by "summary", and future conditions is defined as "futureCond". 
 - Parser: `infer_future/infer/src/clang/parser.mly`. The current entry for the parser is "summary" and "standaloneFC" for parsing the user defined specification. 
 - Lexer: `infer_future/infer/src/clang/lexer.mll` 
+- Test Cases: `benchmark/paper/`. Each subfolder in this directory contains a list of programs which can be verified. Each subfolder also contains one file named `spec.c`, containing all the predefined specifications.  
 
 
