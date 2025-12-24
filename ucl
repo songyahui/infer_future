@@ -1,0 +1,29 @@
+> infer-future/report.csv
+> infer-future/reportPost.csv
+
+# file 
+
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test01_simple_null.c
+
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test02_conditional_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test03_struct_field_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test04_array_index_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test05_function_return_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test06_loop_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test07_double_pointer_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test08_malloc_fail.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test09_linked_list_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test10_switch_case_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test11_arithmetic_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test12_string_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test13_callback_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test14_nested_struct_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test15_global_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test16_ternary_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test17_macro_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test18_realloc_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test19_union_null.c 
+infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test20_cast_null.c
+
+python3 postprocess.py
+

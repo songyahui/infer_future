@@ -650,27 +650,11 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
 
 
-(*
-let rec createIntermediateValue4execution (li:term list) state : ((core_lang list) * (term list)) = 
-  match li with 
-  | [] -> [], []
-  | x :: xs  -> 
-    let cl1, tLi1  = 
-      match x with 
-      | TApp (str, terms) -> 
-        let ex = Var (verifier_get_A_freeVar UNIT) in 
-        [(CAssign(ex, CFunCall(str, terms, state), state))], [ex]
-      | _ -> [], [x]
-        
-    in 
-    
-    let cl2, tLi2  = (createIntermediateValue4execution xs state) in 
-    cl1@cl2, tLi1@tLi2
-
-
-*)
-
-
+let isPointer (tp: Clang_ast_t.type_ptr) : bool =
+  let c_type = CAst_utils.get_type tp in
+  match c_type with 
+  | Some (PointerType _) -> true
+  | _ -> false
 
 let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang = 
 
@@ -688,32 +672,34 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
   let core_lang_of_decl_list (dec :Clang_ast_t.decl list) fp : core_lang = 
     let reverseDeclList = reverse dec in 
-    let rec assembleThePairs (li:Clang_ast_t.decl list) (acc: core_lang option): ((string * core_lang option * int) list) = 
+    let rec assembleThePairs (li:Clang_ast_t.decl list) (acc: core_lang option): ((string * Clang_ast_t.type_ptr * core_lang option * int) list) = 
       match li with 
       | [] -> [] 
       | x :: xs  -> 
         (match x with 
         | VarDecl (_, ndi, qt, vdi) -> 
-          let varName = ndi.ni_name in 
+          let varName = ndi.ni_name in
+          (*let lhsTerm = if isPointer qt then (Pointer varName) else (Var varName) in *)
           let (acc': core_lang option) = 
             (match vdi.vdi_init_expr with 
             | None -> acc
             | Some stmt -> Some (convert_AST_to_core_program stmt))
           in 
-          (varName, acc', fp) :: assembleThePairs (xs) acc'
+          (varName, qt.qt_type_ptr , acc', fp) :: assembleThePairs (xs) acc'
         | _ -> []
   
         )
     in 
-    let (temp:((string * core_lang option * int) list)) = assembleThePairs reverseDeclList None in 
+    let (temp:((string * Clang_ast_t.type_ptr * core_lang option * int) list)) = assembleThePairs reverseDeclList None in 
     let reverseBack = reverse temp in 
-    let (coreLangList:core_lang list) = flattenList (List.map reverseBack ~f:(fun (a, b, c) -> 
+    let (coreLangList:core_lang list) = flattenList (List.map reverseBack ~f:(fun (a, tp, b, c) -> 
       match b with 
       | None -> [CLocal(a, c)]
-      | Some e -> [CLocal(a, c); CAssign (Var a, e, c)]
+      | Some e -> 
+        let t = if isPointer tp then (Pointer a) else (Var a) in
+        [CLocal(a, c); CAssign (t, e, c)]
       ))
     in sequentialComposingListStmt coreLangList fp
-
   in   
   
   
@@ -789,10 +775,9 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     )
 
 
-  | DeclStmt (stmt_info, _, handlers) -> 
-
+  | DeclStmt (stmt_info, _, decl_list) ->
     let (fp:int) = stmt_info2FootPrint stmt_info in 
-    core_lang_of_decl_list handlers fp
+    core_lang_of_decl_list decl_list fp
 
     
 
@@ -1276,7 +1261,9 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
           (*debug_print (source_Address);  *)
           let (startingState:effect) = [defaultSinglesEff] in
 
-          let (core_prog:core_lang) = convert_AST_to_core_program stmt in 
+          let (core_prog:core_lang) = convert_AST_to_core_program stmt in
+
+          print_endline ("\nCore Lang of "^ funcName ^ ":\n" ^ string_of_core_lang core_prog);
           
           let (stmt_info , _) =  Clang_ast_proj.get_stmt_tuple stmt in 
           let (_, s2) = stmt_info.si_source_range in 

@@ -105,7 +105,7 @@ type term =
     | Num of int
     | Var of string
     | Str of string
-    (* | Pointer of string   *)
+    | Pointer of string
     | Plus of term * term 
     | Minus of term * term 
     | Rel of bin_op * term * term 
@@ -254,7 +254,7 @@ let rec string_of_term t : string =
   match t with
   | RES -> "res"
   | Num i -> if i >=0 then string_of_int i else  "(" ^string_of_int i^ ")"
-  | ANY -> "*"
+  | (ANY : term) -> "*"
   | UNIT -> "()"
   | Nil -> "nil"
   | TCons (a, b) -> Format.asprintf "%s::%s" (string_of_term a) (string_of_term b)
@@ -265,9 +265,7 @@ let rec string_of_term t : string =
   | TOr (a, b) -> Format.asprintf "%s || %s" (string_of_term a) (string_of_term b)
   | Var str -> str
   | Str str -> "\'"^ str ^ "\'"
-
-  (* | Pointer str -> "*" ^ str
-*)
+  | Pointer str -> "*" ^ str
   | Rel (bop, t1, t2) ->
     "(" ^ string_of_term t1 ^ (match bop with | EQ -> "==" | _ -> string_of_bin_op bop) ^ string_of_term t2 ^ ")"
   | Plus (t1, t2) -> "(" ^string_of_term t1 ^ "+" ^ string_of_term t2^ ")"
@@ -526,7 +524,7 @@ let check pi =
   Goal.add goal [ expr ];
   let solver = Solver.mk_simple_solver ctx in
   List.iter ~f:(fun a -> Solver.add solver [ a ]) (Goal.get_formulas goal);
-  let sat = Solver.check solver [] == Solver.SATISFIABLE in
+  let sat = phys_equal (Solver.check solver []) Solver.SATISFIABLE in
   (* print_endline (Solver.to_string solver); *)
   sat
 
