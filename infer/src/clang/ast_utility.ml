@@ -192,6 +192,7 @@ let verifier_get_A_freeVar term :string  =
   let prefix =
     match term with 
     | Var str -> "v"
+    | Pointer str -> "p"
     | _ -> "v"
   in
   let x = prefix ^ string_of_int (!verifier_counter) in
@@ -254,7 +255,7 @@ let rec string_of_term t : string =
   match t with
   | RES -> "res"
   | Num i -> if i >=0 then string_of_int i else  "(" ^string_of_int i^ ")"
-  | (ANY : term) -> "*"
+  | (ANY : term) -> "_"
   | UNIT -> "()"
   | Nil -> "nil"
   | TCons (a, b) -> Format.asprintf "%s::%s" (string_of_term a) (string_of_term b)
@@ -348,7 +349,7 @@ and string_of_regularExpr re =
 
 let rec strict_compare_Term (term1:term) (term2:term) : bool =
   match (term1, term2) with
-    (Var s1, Var s2) -> String.compare s1 s2 == 0
+  | (Var s1, Var s2) | (Pointer s1, Pointer s2) -> String.compare s1 s2 == 0
   | (Num n1, Num n2) -> n1 == n2
   | (Plus (tIn1, num1), Plus (tIn2, num2)) 
   | (TAnd (tIn1, num1), TAnd (tIn2, num2)) 
@@ -441,7 +442,8 @@ let rec existInhistoryTable pi table=
 
 let rec term_to_expr ctx : term -> Z3.Expr.expr = function
   | ((Num n))        -> Z3.Arithmetic.Real.mk_numeral_i ctx n
-  | ((Var v))           -> Z3.Arithmetic.Real.mk_const_s ctx v
+  | ((Var v))        -> Z3.Arithmetic.Real.mk_const_s ctx v
+  | ((Pointer v))    -> Z3.Arithmetic.Real.mk_const_s ctx v
   | ((Nil))           -> Z3.Arithmetic.Real.mk_const_s ctx "nil"
   | ((RES))           -> Z3.Arithmetic.Real.mk_const_s ctx "ret"
   | (Member (a, b))   -> 
@@ -1137,7 +1139,7 @@ let substitute_term_aux (t:term) (actual_formal_mappings:((term*term)list)): ter
 
 let rec substitute_term (t:term) (actual_formal_mappings:((term*term)list)): term = 
   match t with
-  | Var _ -> substitute_term_aux t actual_formal_mappings
+  | Var _ | Pointer _ -> substitute_term_aux t actual_formal_mappings
 
   | TCons (a, b) -> 
     TCons (substitute_term a actual_formal_mappings, substitute_term b actual_formal_mappings)

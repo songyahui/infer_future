@@ -183,12 +183,17 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term option =
 
   | UnaryOperator (stmt_info, x::_, expr_info, op_info) ->
     (match op_info.uoi_kind with
-    | `Minus -> 
-      (match stmt2Term x with 
+    | `Minus ->
+      (match stmt2Term x with
       | (Some  (Num t)) -> (Some (Num (0-t)))
       | _ -> 
         stmt2Term x
 
+      )
+    | `Deref -> 
+      (match stmt2Term x with
+      | Some (Var t) -> Some (Pointer t)
+      | t -> t
       )
       
     | _ -> 
@@ -507,13 +512,12 @@ let substitute_single_effect_renaming (spec:singleEffect) (mappings:((term*term)
 
 let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang) : effect = 
 
+  (*print_endline ("\nForward_reasoning state " ^ string_of_effect states);*)
   let rec aux expr (state:singleEffect) : effect = 
   let (exs, p, re, fc, ret, errorCode) = state in
   
 
   match expr with 
-
-
   | CValue(t, fp) -> 
     let final = [(exs, p, re, fc, t, errorCode)] in 
     final 
@@ -523,20 +527,45 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     let effect2 = forward_reasoning signature effect1 e2 in
     effect2 
 
-  | CAssign (v, e, fp) -> 
-    let effect1 = aux e state in 
+  | CAssign (v, e, fp) ->
+    (* step 1: firstly substruct possiblly dereference in the lhs *)
+    let (ev : regularExpr) =
+      match v with
+      | Pointer _ -> Singleton (Pos ("deref", [v]))
+      | _ -> Emp
+    in
+    let fc_subtracted_after_deref = normalize_fc (trace_subtraction p TRUE (normalize_es fc) ev fp) in
+
+    let state_after_deref = (exs, p, re, fc_subtracted_after_deref, ret, errorCode) in
+
+    (* step 2: get the effect of the rhs *)
+    let effect1 = aux e state_after_deref in
 
     let effect1', extensionR = 
       let r = verifier_get_A_freeVar v in 
       substitute_effect effect1 [(Var r, v)], [r]
 
     in 
-    let ev = Emp in (*Singleton (Pos ("a", [v]))*) 
+
+    (* step 3: compose the effects *)
+    let res =
     flattenList (List.map ~f:(fun (exs, p, re, fc, ret, errorCode) -> 
-      let state' = (exs@extensionR, PureAnd(p, Eq(v, ret)), re, fc, UNIT, errorCode) in 
-      compose_effects state' ([([], TRUE, ev, fc_default, ret, errorCode)]) fp
+      let conjPure = PureAnd(p, Eq(v, ret)) in
+      let state' = (exs@extensionR, conjPure, re, fc, UNIT, errorCode) in
+
+      (* if the rhs is a pointer, need to add fc constraints that when rhs is null, globally do not access *)
+      let purefcPair : (pure * futureCond) list = match v with
+          | Pointer _ ->
+            let fc_assert_deref_non_null = Kleene (Singleton (NegTerm ([v]))) in
+            [(Neg (Eq (ret, Num 0)), fc_default);
+             (Eq (ret, Num 0), fc_assert_deref_non_null)]
+          | _ -> [(TRUE, fc_default)]
+          in
+      compose_effects state' (List.map ~f:(fun (p', fc') -> ([], p', Emp, fc', ret, errorCode)) purefcPair) fp
     ) effect1' )
-    
+    in
+    res
+    (*[([], TRUE, ev, fcExtra, ret, errorCode)]*)
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret, errorCode)]
 
@@ -832,11 +861,11 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `PreDec
       | `PostDec -> CAssign(varFromX, CValue (Minus(varFromX, Num 1), fp), fp)
       | `AddrOf -> CValue (varFromX, fp)
-      | `Deref -> 
+      | `Deref ->
         (match varFromX with
         | Member (t, _) -> 
-          CSeq(CEvent(Pos("deref", [t]), fp),  
-          CValue (varFromX, fp))
+          (*CSeq(CEvent(Pos("deref", [t]), fp),   *)
+          CValue (varFromX, fp)
         | _ -> CValue (varFromX, fp)
         )
         
@@ -915,11 +944,6 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `LT | `GT | `GE | `LE | `EQ | `NE ->  
         CIfELse(getOpPure t1 t2  , CValue(Num 1, fp), CValue(Num 0, fp), fp)
 
-
-      (*
-              in 
-
-      *)
 
         
       | _ ->  
@@ -1433,11 +1457,6 @@ let retrieveSpecifications (source:string) : (Ast_utility.summary list * int * i
       
     let partitions = retrieveComments line in (*in *)
     let line_of_spec = List.fold_left partitions ~init:0 ~f:(fun acc a -> acc + (List.length (Str.split (Str.regexp "\n") a)))  in 
-      
-    (*
-    (if List.length partitions == 0 then ()
-    else debug_print ("Global specifictaions are: ")); 
-    *)
 
     let user_sepcifications = List.map partitions 
         ~f:(fun singlespec -> 
