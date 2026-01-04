@@ -114,14 +114,6 @@ pure:
 | a = pure DISJ b = pure {PureOr (a, b)}
 | EXIST strs= list_of_exs CONCAT a = pure {Exists ( strs, a)}
 
-(*
-%type <(Ast_utility.futureCond)> futureCond
-
-futureCond: 
-| s = es {[s]}
-| li= futureCond CONJ s = es {li@[s]}
-
-*)
 
 standaloneFC:
 | fc = es EOF    { fc }  

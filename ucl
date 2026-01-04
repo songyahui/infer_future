@@ -4,7 +4,6 @@
 # file 
 
 infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test01_simple_null.c
-
 infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test02_conditional_null.c 
 infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test03_struct_field_null.c 
 infer/bin/infer run -- clang -c benchmark/c_npe_complete_results/test04_array_index_null.c 

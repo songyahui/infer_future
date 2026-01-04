@@ -1242,15 +1242,9 @@ and substitute_RE (re:regularExpr) (actual_formal_mappings:((term*term)list)): r
     Disjunction(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
      
   | Kleene effIn -> Kleene (substitute_RE effIn actual_formal_mappings)
-  (*
-  | Bag((b1, b2), li) -> 
-    let b1' = substitute_term b1 actual_formal_mappings in 
-    let b2' = substitute_term b2 actual_formal_mappings in 
-    let li' = List.map ~f:(fun (p, es)-> substitute_pure p actual_formal_mappings, substitute_RE es actual_formal_mappings) li  
-    in 
-    Bag((b1', b2'), li')
-    *)
-  | _ -> re
+  | Conjunction (eff1, eff2) ->
+    Conjunction(substitute_RE eff1 actual_formal_mappings, substitute_RE eff2 actual_formal_mappings)
+  | Emp | Bot  -> re
 
 let rec substitute_FC (fc:futureCond) (actual_formal_mappings:((term*term)list)): futureCond = substitute_RE fc actual_formal_mappings
 

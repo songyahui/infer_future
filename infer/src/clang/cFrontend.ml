@@ -520,12 +520,12 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
   match expr with 
   | CValue(t, fp) -> 
     let final = [(exs, p, re, fc, t, errorCode)] in 
-    final 
+    final
   
   | CSeq (e1, e2) -> 
     let effect1 = aux e1 state in
     let effect2 = forward_reasoning signature effect1 e2 in
-    effect2 
+    effect2
 
   | CAssign (v, e, fp) ->
     (* step 1: firstly substruct possiblly dereference in the lhs *)
@@ -543,7 +543,10 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
 
     let effect1', extensionR = 
       let r = verifier_get_A_freeVar v in 
-      substitute_effect effect1 [(Var r, v)], [r]
+      let actual_formal_mappings = match v with
+        | Var str -> [(Var r, v);(Var r, Pointer str)]
+        | _ -> [(Var r, v)] in
+      substitute_effect effect1 actual_formal_mappings, [r]
 
     in 
 
@@ -739,7 +742,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
 
     let int_str = integer_literal_info.ili_value in 
 
-    if String.length int_str > 18 then (CValue (Var "SYH_BIGINT", fp))
+    if String.length int_str > 18 then (CValue (Var "BIGINT", fp))
     else (CValue(Num (int_of_string(int_str)), fp))
 
 
@@ -750,6 +753,17 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     let (fp:int) = stmt_info2FootPrint stmt_info in 
     let stmts = List.map stmtLi ~f:(fun a -> convert_AST_to_core_program a) in 
     sequentialComposingListStmt stmts fp 
+
+  | ReturnStmt  (stmt_info, stmt :: _) ->
+    let (fp:int) = stmt_info2FootPrint stmt_info in
+
+    let coreLang, ret =
+      let coreLangTerm = convert_AST_to_core_program stmt in
+      let freshVar = verifier_get_A_freeVar UNIT in
+      let accL' = CAssign(Var freshVar, coreLangTerm, fp) in
+      (accL', Var freshVar)
+    in
+    sequentialComposingListStmt ([coreLang] @ [(CValue(ret, fp))]) fp
 
   | ReturnStmt  (stmt_info, stmtLi) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
@@ -872,7 +886,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
         
       | `Minus -> CValue (TTimes(Num (-1), varFromX), fp)
       | _ -> 
-        print_endline (string_of_unary_operator_info unary_operator_info); 
+        debug_print (string_of_unary_operator_info unary_operator_info);
         CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)], fp)) 
       )
       
@@ -880,7 +894,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       (match unary_operator_info.uoi_kind with
       | `AddrOf -> convert_AST_to_core_program x
       | _ -> 
-      print_endline (string_of_unary_operator_info unary_operator_info); 
+      debug_print (string_of_unary_operator_info unary_operator_info);
       CFunCall ((Clang_ast_proj.get_stmt_kind_string instr, [Var (string_of_unary_operator_info unary_operator_info)], fp)) 
       )
     )
@@ -1031,7 +1045,9 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
     (match temp with 
     | [] -> CValue (Nil, fp) 
     | [Some x] -> CValue (x, fp) 
-    | Some x :: xs -> CValue (Member (x, termOption2TermLi xs) , fp) 
+    | Some x :: xs ->
+        CSeq(CEvent(Pos("deref", [x]), fp),
+        CValue (Member (x, termOption2TermLi xs) , fp))
     | _ -> CSkip fp
     )
 
@@ -1287,7 +1303,7 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let (core_prog:core_lang) = convert_AST_to_core_program stmt in
 
-          print_endline ("\nCore Lang of "^ funcName ^ ":\n" ^ string_of_core_lang core_prog);
+          debug_print ("\nCore Lang of "^ funcName ^ ":\n" ^ string_of_core_lang core_prog);
           
           let (stmt_info , _) =  Clang_ast_proj.get_stmt_tuple stmt in 
           let (_, s2) = stmt_info.si_source_range in 
@@ -1383,9 +1399,10 @@ let retrieveLinesOfCode (source:string) : (int) =
 let retrieve_basic_info_from_AST ast_decl: (string * Clang_ast_t.decl list * int) = 
     match ast_decl with
     | Clang_ast_t.TranslationUnitDecl (decl_info, decl_list, _, translation_unit_decl_info) ->
-        let source =  translation_unit_decl_info.tudi_input_path in 
+        let source =  translation_unit_decl_info.tudi_input_path in
+        let file_name = Filename.basename source in
         let lines_of_code  = retrieveLinesOfCode source in 
-        (source, decl_list, lines_of_code) 
+        (file_name, decl_list, lines_of_code)
  
     | _ -> assert false
 
