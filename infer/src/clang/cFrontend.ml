@@ -206,7 +206,11 @@ let rec stmt2Term (instr: Clang_ast_t.stmt) : term option =
 
   | ConditionalOperator (_, x::y::_, _) -> stmt2Term y 
   | StringLiteral (_, _, _, x::_)-> Some ((Str x)) 
-  | CharacterLiteral _ -> Some ((Str "char")) 
+  | CharacterLiteral (_, _, _, n)->
+    (match Char.of_int n with
+    | Some c -> Some ((Str (String.make 1 c)))
+    | None -> Some ((Str (string_of_int n)))
+    )
 
   | CallExpr (_, stmtLi, ei) -> None 
     (*match stmtLi with
@@ -451,6 +455,14 @@ let enforcePureSingleEffect (p:pure) (re:singleEffect) : singleEffect =
 let enforcePure (p:pure) (re:effect) : effect = 
   List.map re ~f:(fun single -> enforcePureSingleEffect  p single ) 
 
+let enforceRESingleEffect (p:regularExpr) (re:singleEffect) fp : singleEffect =
+  let (exs, a, b, c, r, errorCode) = re in
+  let fc' = normalize_fc (trace_subtraction a TRUE (normalize_es c) p fp) in
+  (exs, a, Concate(p, b),  fc', r, errorCode)
+
+let enforceRE (p:regularExpr) (re:effect) fp : effect =
+  List.map re ~f:(fun single -> enforceRESingleEffect  p single fp)
+
 
 
 let rec findSpecificationSummaries (f:string) (summaries:summary list) (actual_Length:int) : summary option = 
@@ -572,14 +584,16 @@ let rec forward_reasoning (signature:signature) (states:effect) (prog: core_lang
     
   | CLocal (str, fp) -> [(exs@[str], p, re, fc, ret, errorCode)]
 
-  | CIfELse (p, e1, e2, _) -> 
-    let current1 = enforcePure p [state] in 
-    let current2 = enforcePure (Neg p) [state] in 
-    let effect1 = forward_reasoning signature current1 e1 in 
+  | CIfELse (p, e1, e2, fp) ->
+    let re  : regularExpr =
+      match p with
+      | Eq (Pointer v, _) -> Singleton (Pos ("deref", [Var v]))
+      | _ -> Emp
+    in
+    let current1 = enforceRE re (enforcePure p [state]) fp in
+    let current2 = enforceRE re (enforcePure (Neg p) [state]) fp in
+    let effect1 = forward_reasoning signature current1 e1 in
     let effect2 = forward_reasoning signature current2 e2 in
-    (*debug_printCIfELse("effect1 = " ^ string_of_effect effect1) ; 
-    debug_printCIfELse("effect2 = " ^ string_of_effect effect2) ; 
-    *)
     effect1@effect2
 
   | CFunCall (f, xs, fp) -> 
