@@ -777,7 +777,8 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       let accL' = CAssign(Var freshVar, coreLangTerm, fp) in
       (accL', Var freshVar)
     in
-    sequentialComposingListStmt ([coreLang] @ [(CValue(ret, fp))]) fp
+    sequentialComposingListStmt ([coreLang] @ [(CFunCall(retKeyword, [ret], fp))]) fp
+    (*[(CValue(ret, fp))]*)
 
   | ReturnStmt  (stmt_info, stmtLi) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
@@ -797,7 +798,7 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       ) ~init:([], []) stmtLi 
     in 
 
-    sequentialComposingListStmt (coreLang @ [(CFunCall("return", termLi, fp))]) fp
+    sequentialComposingListStmt (coreLang @ [(CFunCall(retKeyword, termLi, fp))]) fp
 
     
     
@@ -1582,6 +1583,12 @@ let rec sublist (b:int) (e:int) l =
      if b>0 then tail else h :: tail
 
 
+let rec containsSummary (summaries : summary list) (name:string) : bool =
+  match summaries with
+  | [] -> false
+  | ((n, _), _, _) :: rest ->
+      if String.compare n name == 0 then true
+      else containsSummary rest name
 
 let do_source_file (translation_unit_context : CFrontend_config.translation_unit_context) ast =
   verifier_counter_reset_to 0; 
@@ -1608,6 +1615,10 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   let (_, lines_of_spec_macro, number_of_protocol_macro) = retrieveSpecifications (path ^ source_file_root) in 
   
   let (_, lines_of_spec_local, number_of_protocol_local) = retrieveSpecifications (source_file) in 
+
+  (if containsSummary !summaries retKeyword
+  then ()
+  else summaries := !summaries @ [returnSummary]);
 
   let start = Unix.gettimeofday () in 
   let _ = List.iter decl_list  

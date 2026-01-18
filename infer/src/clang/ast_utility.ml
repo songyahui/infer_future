@@ -11,7 +11,7 @@ let errorCode_break = -4
 
 
 
-let retKeyword = "Return"
+let retKeyword = "return"
 let finalReport = (ref "")
 let verifier_counter: int ref = ref 0;;
 let invariantInference_counter: int ref = ref 0;;
@@ -187,6 +187,13 @@ type summary = signature * precondition * effect
 let (summaries: (summary list)ref) = ref []
 
 let defaultSinglesEff = ([], TRUE, Emp, fc_default, Var "_" , 0 )
+
+let returnSummary : summary = ((retKeyword, [Var "t"]), TRUE, [([], TRUE, Emp, fc_default, Var "t", -1)])
+(*
+  /*@ return(t) =
+    REQ  TRUE
+    ENS (: TRUE ; 𝝐 ; (_)^* ; t; -1) @*/
+*)
 
 let verifier_get_A_freeVar term :string  =
   let prefix =
