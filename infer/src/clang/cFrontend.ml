@@ -893,9 +893,9 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
       | `Deref ->
         (match varFromX with
         | Member (t, _) -> 
-          (*CSeq(CEvent(Pos("deref", [t]), fp),   *)
-          CValue (varFromX, fp)
-        | _ -> CValue (varFromX, fp)
+          CSeq(CEvent(Pos("deref", [t]), fp),
+          CValue (varFromX, fp))
+        | _ -> CSeq(CEvent(Pos("deref", [varFromX]), fp),CValue (varFromX, fp))
         )
         
         
@@ -1164,11 +1164,12 @@ let rec convert_AST_to_core_program (instr: Clang_ast_t.stmt)  : core_lang =
             CAssumeF(fc)
           | _  ->  CAssumeF(fc_default) 
         )
-      else 
+      else
         (*let prefixCmds, actualLi' = createIntermediateValue4execution actualLi fp in *)
         sequentialComposingListStmt (extraCoreLang@[(CFunCall(calleeName, actualLi, fp))]) fp)
-    | _ -> 
-        let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in sequentialComposingListStmt stmts fp
+    | _ ->
+        let stmts = List.map (x ::rest) ~f:(fun a -> convert_AST_to_core_program a) in 
+        sequentialComposingListStmt stmts fp
     )
   | NullStmt (stmt_info, _) -> 
     let (fp:int) = stmt_info2FootPrint stmt_info in 
@@ -1210,7 +1211,8 @@ and extractEventFromFUnctionCall (x:Clang_ast_t.stmt) (rest:Clang_ast_t.stmt lis
         | Some named_decl_info -> 
           let coreLang, termLi =  
             List.fold_left ~f:(fun (accL, acctL) term -> 
-              match stmt2Term term with 
+              match stmt2Term term with
+              | Some (Pointer t) -> (accL @ [CEvent(Pos("deref", [(Pointer t)]), fp)], acctL@[(Pointer t)])
               | Some t  -> (accL, acctL@[t]) 
               | None -> 
                 let coreLangTerm = convert_AST_to_core_program term in 
@@ -1326,12 +1328,12 @@ let reason_about_declaration (dec: Clang_ast_t.decl) (source_Address:string): un
 
           let (fp:int) =si_source_location_to_int s2 in 
 
-          debug_print (string_of_core_lang core_prog);
+          print_endline (string_of_core_lang core_prog);
           let signature = (funcName, parameters) in 
 
           let raw_final = normalize_effect (forward_reasoning signature startingState core_prog) in 
           
-          debug_print("\nRaw_final  = " ^ string_of_effect raw_final);
+          print_endline ("\nRaw_final  = " ^ string_of_effect raw_final);
           let (postProcess:effect) = ((postProcess raw_final)) in
 
           let resetErrorCodeEffect = List.fold_left ~f:(
@@ -1616,9 +1618,12 @@ let do_source_file (translation_unit_context : CFrontend_config.translation_unit
   
   let (_, lines_of_spec_local, number_of_protocol_local) = retrieveSpecifications (source_file) in 
 
-  (if containsSummary !summaries retKeyword
-  then ()
-  else summaries := !summaries @ [returnSummary]);
+  let number_of_protocol_macro =
+    (if containsSummary !summaries retKeyword
+      then number_of_protocol_macro
+      else 
+        (summaries := !summaries @ [returnSummary];
+        number_of_protocol_macro + 1)) in
 
   let start = Unix.gettimeofday () in 
   let _ = List.iter decl_list  

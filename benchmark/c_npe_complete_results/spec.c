@@ -1,16 +1,12 @@
 #include <fcntl.h>   // here has to be something  
 
-/*@ printf(t, p) =
-    REQ  TRUE
-    ENS (: TRUE ; printf(p) ; (_)^* ; unit) @*/
-
 /*@ free(ptr)  =
     REQ  TRUE
     ENS (∃ r : r=unit ; free(ptr) ; (!_(ptr))^* ; r) @*/
 
 /*@ malloc(size) =
     REQ TRUE
-    ENS (∃ l : TRUE ; malloc(l)  ; (!free(l))^* · free(l) ·  (_)^* ; l)  @*/
+    ENS (∃ l : !(l=0) ; malloc(l)  ; (!free(l))^* · free(l) ·  (_)^* ; l)  @*/
 
 /*@ realloc(ptr, size) =
     REQ TRUE

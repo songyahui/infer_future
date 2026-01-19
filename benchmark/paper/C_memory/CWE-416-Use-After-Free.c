@@ -32,10 +32,10 @@ int main(int argc, char **argv) {
 }
 
 int paper(int argc, char **argv) {
-    char *buf1R1, *buf2R1, *buf2R2;
-    buf1R1 = (char *) malloc(1);
-    buf2R1 = (char *) malloc(1);
-    free(buf2R1); // free buf2R1
-    buf2R2 = (char *) malloc(1);
-    strncpy(buf2R1,argv[1],1); //4. UAF
-    free(buf1R1); free(buf2R2); }
+    char *buf1, *buf2, *buf3;
+    buf1 = (char *) malloc(1);
+    buf2 = (char *) malloc(1);
+    free(buf2); // free buf2R1
+    buf3 = (char *) malloc(1);
+    strncpy(buf2,argv[1],1); //4. UAF
+    free(buf1); free(buf3); }

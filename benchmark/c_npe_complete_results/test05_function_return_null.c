@@ -9,8 +9,8 @@ int* create_array(int size) {
     return malloc(size * sizeof(int));
 }
 
-int main() {
-    int *arr = create_array(0);  // Will return NULL
+int main(int n) {
+    int *arr = create_array(n);  // Will return NULL
     
     // Bug: dereferencing NULL return value
     arr[0] = 100;
